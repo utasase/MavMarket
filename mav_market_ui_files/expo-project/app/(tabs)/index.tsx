@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { Search, SlidersHorizontal, X, Heart, Menu } from 'lucide-react-native';
 import { Image } from 'expo-image';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut, SlideInDown, SlideOutDown } from 'react-native-reanimated';
 import Slider from '@react-native-community/slider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { listings, categories, type ListingItem } from '../../constants/mockData';
