@@ -69,7 +69,7 @@ SplashScreen (always shown first)
 
 `AuthProvider` (`lib/auth-context.tsx`) wraps the whole app and exposes `useAuth()` → `{ session, user, loading }`. Auth state changes (login/logout) automatically cause `AppGate` in `_layout.tsx` to re-render and show/hide `LoginPage`.
 
-Email validation enforces `@mavs.uta.edu` or `@uta.edu` on signup.
+Email validation enforces `@mavs.uta.edu` or `@uta.edu` on signup — **client-side only in `LoginPage.tsx`; this restriction is NOT enforced at the DB or RLS level yet.**
 
 ### Database Layer (`lib/`)
 
@@ -77,12 +77,15 @@ Email validation enforces `@mavs.uta.edu` or `@uta.edu` on signup.
 |------|---------|
 | `lib/supabase.ts` | Supabase client with AsyncStorage session persistence |
 | `lib/auth-context.tsx` | React context for session state |
-| `lib/listings.ts` | `getListings()`, `createListing()`, `deleteListing()`, `markListingAsSold()` — listing status: `draft \| active \| reserved \| sold \| removed` |
-| `lib/messages.ts` | Conversations CRUD, `sendMessage()`, `subscribeToMessages()` (realtime), `createConversation()` |
-| `lib/profile.ts` | `getCurrentUserProfile()`, `getSellerListings()`, `updateUserProfile()` |
-| `lib/saved.ts` | `getSavedListingIds()`, `saveItem()`, `unsaveItem()` — requires `saved_items` table (see migration below) |
+| `lib/listings.ts` | `getListings()`, `createListing()`, `deleteListing()`, `markListingAsSold()`, `updateListingStatus()` — filters on `status = 'active'`; exports `ListingStatus` type |
+| `lib/messages.ts` | Conversations CRUD, `sendMessage()`, `subscribeToMessages()` (realtime), `createConversation()`, `markConversationRead()` — unread counts derived from `message_reads` table |
+| `lib/profile.ts` | `getCurrentUserProfile()`, `getSellerListings()`, `updateUserProfile()`, `getNotificationPreferences()`, `updateNotificationPreferences()` |
+| `lib/saved.ts` | `getSavedListingIds()`, `saveItem()`, `unsaveItem()` |
 | `lib/notifications.ts` | `getNotifications()`, `markNotificationAsRead()` |
 | `lib/storage.ts` | `pickAndUploadListingImage()` — opens image picker and uploads to Supabase Storage `listings` bucket |
+| `lib/reviews.ts` | `getReviews(sellerId)`, `createReview()`, `hasReviewed()` |
+| `lib/reports.ts` | `createReport()`, `REPORT_REASONS`, `ReportTargetType` |
+| `lib/moderation.ts` | `getOpenReports()`, `takeModAction()`, `isCurrentUserAdmin()` — admin-only functions gated by `users.is_admin` |
 
 ### Mock Data Fallback
 
@@ -90,26 +93,21 @@ Email validation enforces `@mavs.uta.edu` or `@uta.edu` on signup.
 
 ### Database Schema (Supabase)
 
-5 tables: `users` (extends `auth.users` via trigger), `listings`, `conversations`, `messages`, `notifications`. RLS is enabled on all tables — all queries require an authenticated session. Realtime is enabled on `messages`.
+Current tables (all RLS-enabled, authenticated session required):
 
-The `conversations` table has a unique constraint on `(listing_id, buyer_id, seller_id)` — `createConversation()` uses upsert so tapping "Message Seller" multiple times is idempotent.
+| Table | Notes |
+|-------|-------|
+| `users` | Extends `auth.users` via trigger; has `notification_preferences jsonb` column |
+| `listings` | `status listing_status enum` (`draft\|active\|reserved\|sold\|removed`) — run migration 20240006 |
+| `conversations` | Unique constraint on `(listing_id, buyer_id, seller_id)` — `createConversation()` upserts safely |
+| `messages` | Realtime enabled |
+| `notifications` | |
+| `saved_items` | Added in migration `20240002` |
+| `reviews` | Added in migration `20240003`; trigger auto-updates `users.rating` on insert |
+| `reports` | Added in migration `20240004`; has `report_target_type` and `report_status` enums |
+| `message_reads` | Added in migration `20240005`; drives `unread` counts in conversations |
 
-The `saved_items` table is **not in the initial migration** — run this in the Supabase SQL Editor before using the save feature:
-```sql
-create table public.saved_items (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid references public.users(id) on delete cascade not null,
-  listing_id uuid references public.listings(id) on delete cascade not null,
-  created_at timestamptz default now(),
-  unique(user_id, listing_id)
-);
-alter table public.saved_items enable row level security;
-create policy "saved_items_select" on public.saved_items for select to authenticated using (user_id = auth.uid());
-create policy "saved_items_insert" on public.saved_items for insert to authenticated with check (user_id = auth.uid());
-create policy "saved_items_delete" on public.saved_items for delete to authenticated using (user_id = auth.uid());
-```
-
-Supabase Storage: enable the `listings` bucket (public) in the Supabase dashboard. Authenticated users need insert permission on the bucket to upload listing/avatar images.
+Supabase Storage: `listings` bucket (public). Authenticated users need insert permission to upload listing/avatar images. **Storage bucket RLS is not fully locked down yet** — a pending security task.
 
 ### Supabase Migrations
 
@@ -117,19 +115,37 @@ Two `supabase/` directories exist:
 - `MavMarketApp/supabase/migrations/` — app-level migrations (use these)
 - Root-level `supabase/` — separate config, likely for local dev with the Supabase CLI
 
+**Already applied** (do not re-run):
+| File | What it adds |
+|------|-------------|
+| `20240001_init.sql` | Core tables: users, listings, conversations, messages, notifications |
+| `20240002_saved_items.sql` | `saved_items` table + RLS |
+| `20240003_reviews.sql` | `reviews` table + `users.rating` trigger |
+| `20240004_reports.sql` | `reports` table with status/target enums |
+| `20240005_message_reads_and_prefs.sql` | `message_reads` table + `users.notification_preferences` |
+| `20240006_listing_status.sql` | Replaces `is_sold boolean` with `status listing_status enum`; drops `is_sold` |
+| `20240007_moderation_infra.sql` | `is_admin` on users, `moderation_actions`, `audit_events`, admin RLS policies |
+
+**Still deferred:**
+- `rate_limit_log` / `is_rate_limited()` — abuse controls for message/report spam; see `agents/runbooks/release-checklist.md`
+
 ### Agent Coordination System
 
-`MavMarketApp/agents/` defines a multi-agent build orchestration system for developing this app in bounded increments:
+`MavMarketApp/agents/` defines a multi-agent build orchestration system:
 
-- `manifest.json` — canonical list of 10 agents, their phases, dependencies, and handoff targets
-- `contracts.md` — **read this before editing shared interfaces** — stable boundaries all agents must respect (auth model, data shapes, RLS invariants, messaging contracts, moderation statuses)
-- `orchestrator.md` — sequencing rules, conflict resolution, and release gates
+- `plan.md` — **master orchestration plan**; canonical reference for stack decisions, delivery phases, and agent prompts
+- `manifest.json` — agent registry: 10 agents, phases, dependencies, handoff targets
+- `contracts.md` — **read before touching shared interfaces** — hard boundaries for auth model, data shapes, RLS invariants, messaging, moderation statuses
+- `orchestrator.md` — sequencing rules, conflict resolution, release gates
+- `handoffs/phase-1-progress.md` — **current phase 1 status** (~70% complete as of 2026-03-30); lists what's done, what's missing, and pending migration SQL
 - `runbooks/` — phase-scoped execution plans
 - `specs/` — per-agent acceptance criteria
 
 Agent execution order (all phase 1 unless noted): `orchestrator-agent` → `backend-schema-agent` → `security-agent` → `mobile-foundation-agent` → `auth-agent` → `marketplace-agent` → `messaging-agent` → `profile-trust-agent` → `moderation-admin-agent` → `platform-release-agent` → `payment-architecture-agent` (phase 2, architecture-only).
 
-When implementing any feature that touches auth, listings, messaging, or moderation, check `agents/contracts.md` first to ensure compliance with shared invariants.
+`plan.md` also calls for an `ops-admin-web-agent` (Next.js internal admin console) that does not yet exist in `manifest.json` — add it before that work starts.
+
+When implementing any feature that touches auth, listings, messaging, or moderation, check `agents/contracts.md` first.
 
 ### Key Patterns
 

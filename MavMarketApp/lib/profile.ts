@@ -35,7 +35,7 @@ export async function getSellerListings(sellerId: string): Promise<ListingItem[]
     .select(`
       id, title, price, image_url, category, condition, description,
       created_at, seller_id, pickup_location_name, pickup_location_address,
-      is_on_campus, is_sold,
+      is_on_campus, status,
       seller:users(name, avatar_url, rating)
     `)
     .eq("seller_id", sellerId)
@@ -57,7 +57,7 @@ export async function getSellerListings(sellerId: string): Promise<ListingItem[]
     sellerName: row.seller?.name ?? "Unknown",
     sellerAvatar: row.seller?.avatar_url ?? "",
     sellerRating: row.seller?.rating ?? 0,
-    isSold: row.is_sold ?? false,
+    isSold: row.status === "sold",
     pickupLocation: {
       name: row.pickup_location_name ?? "On Campus",
       address: row.pickup_location_address ?? "UTA Campus, Arlington TX",

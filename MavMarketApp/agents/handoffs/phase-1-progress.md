@@ -45,18 +45,19 @@
 
 ---
 
-## Phase 1 Gate Status
+## Phase 1 Gate Status (updated 2026-03-30)
 
-| Gate | Status | Blocker |
-|------|--------|---------|
+| Gate | Status | Notes |
+|------|--------|-------|
 | Auth data path functional | ✅ | — |
 | Listings data path functional | ✅ | — |
 | Chat data path functional | ✅ | — |
 | Reporting entrypoints on listings and profiles | ✅ | — |
-| Moderation data path functional | ⚠️ Partial | No admin review surface, no audit trail |
-| RLS blocks unauthorized access | ✅ Existing tables | Storage bucket unprotected (see below) |
-| Preview release configuration exists | ⚠️ Partial | EAS credentials empty, no documented build process |
-| Known deferred items documented | ⚠️ Partial | This document; needs formal deferred list |
+| Moderation data path functional | ✅ | `moderation_actions`, `audit_events`, admin queue screen implemented |
+| Listing status enum | ✅ | Migration 20240006 — run in Supabase before using status-gated features |
+| RLS blocks unauthorized access | ✅ Core tables | Storage bucket RLS deferred (documented) |
+| Preview release configuration exists | ✅ iOS | Android needs `npx eas build:configure`; see release-checklist.md |
+| Known deferred items documented | ✅ | See agents/runbooks/release-checklist.md |
 
 ---
 

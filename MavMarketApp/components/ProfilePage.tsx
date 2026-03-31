@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Settings, ArrowLeft } from "lucide-react-native";
+import { Settings, ArrowLeft, Shield } from "lucide-react-native";
 import { currentUser as mockUser, type UserProfile, type ListingItem } from "../data/mockData";
 import { StarRating } from "./StarRating";
 import { ReviewsViewer } from "./ReviewsViewer";
@@ -21,6 +21,8 @@ import { EditProfileModal } from "./EditProfileModal";
 import { useAuth } from "../lib/auth-context";
 import { getCurrentUserProfile, getSellerListings } from "../lib/profile";
 import { deleteListing, markListingAsSold } from "../lib/listings";
+import { isCurrentUserAdmin } from "../lib/moderation";
+import { AdminModerationPanel } from "./AdminModerationPanel";
 import { supabase } from "../lib/supabase";
 
 const { width } = Dimensions.get("window");
@@ -42,16 +44,20 @@ export function ProfilePage() {
     reviewCount: number;
   } | null>(null);
   const [showEditProfile, setShowEditProfile] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
 
   const loadProfile = useCallback(async () => {
     if (!user) return;
     try {
       setLoadingProfile(true);
-      const [prof, items, reviews] = await Promise.all([
+      const [prof, items, reviews, admin] = await Promise.all([
         getCurrentUserProfile(user.id),
         getSellerListings(user.id),
         getReviews(user.id),
+        isCurrentUserAdmin(),
       ]);
+      setIsAdmin(admin);
       if (prof) setProfile({ ...prof, listings: items });
       setListings(items);
       setDbReviews(reviews);
@@ -120,6 +126,10 @@ export function ProfilePage() {
     ]);
   };
 
+  if (showAdminPanel) {
+    return <AdminModerationPanel onBack={() => setShowAdminPanel(false)} />;
+  }
+
   if (viewingProfile) {
     return (
       <FriendProfile
@@ -136,6 +146,14 @@ export function ProfilePage() {
         <Text style={styles.profileUsername}>
           {profile.name.split(" ")[0].toLowerCase()}
         </Text>
+        {isAdmin && (
+          <TouchableOpacity
+            onPress={() => setShowAdminPanel(true)}
+            style={[styles.settingsBtn, { marginRight: 8 }]}
+          >
+            <Shield size={20} color="#DC2626" strokeWidth={1.5} />
+          </TouchableOpacity>
+        )}
         <TouchableOpacity onPress={handleSignOut} style={styles.settingsBtn}>
           <Settings size={22} color="#111827" strokeWidth={1.5} />
         </TouchableOpacity>

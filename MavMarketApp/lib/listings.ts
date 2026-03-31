@@ -1,6 +1,8 @@
 import { supabase } from "./supabase";
 import { type ListingItem } from "../data/mockData";
 
+export type ListingStatus = "draft" | "active" | "reserved" | "sold" | "removed";
+
 export interface CreateListingInput {
   title: string;
   price: number;
@@ -30,13 +32,14 @@ export async function getListings(): Promise<ListingItem[]> {
       condition,
       description,
       created_at,
+      status,
       seller_id,
       pickup_location_name,
       pickup_location_address,
       is_on_campus,
       seller:users(name, avatar_url, rating)
     `)
-    .eq("is_sold", false)
+    .eq("status", "active")
     .order("created_at", { ascending: false });
 
   if (error) throw error;
@@ -55,6 +58,7 @@ export async function getListings(): Promise<ListingItem[]> {
     sellerName: row.seller?.name ?? "Unknown",
     sellerAvatar: row.seller?.avatar_url ?? "",
     sellerRating: row.seller?.rating ?? 0,
+    isSold: row.status === "sold",
     pickupLocation: {
       name: row.pickup_location_name ?? "On Campus",
       address: row.pickup_location_address ?? "UTA Campus, Arlington TX",
@@ -79,6 +83,7 @@ export async function createListing(input: CreateListingInput): Promise<string> 
       pickup_location_name: input.pickup_location_name,
       pickup_location_address: input.pickup_location_address,
       is_on_campus: input.is_on_campus,
+      status: "active",
     })
     .select("id")
     .single();
@@ -93,9 +98,13 @@ export async function deleteListing(id: string): Promise<void> {
 }
 
 export async function markListingAsSold(id: string): Promise<void> {
+  await updateListingStatus(id, "sold");
+}
+
+export async function updateListingStatus(id: string, status: ListingStatus): Promise<void> {
   const { error } = await supabase
     .from("listings")
-    .update({ is_sold: true })
+    .update({ status })
     .eq("id", id);
   if (error) throw error;
 }
