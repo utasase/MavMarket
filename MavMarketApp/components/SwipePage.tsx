@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -13,8 +13,9 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { X, Heart, RotateCcw, ShoppingBag } from "lucide-react-native";
-import { listings, type ListingItem } from "../data/mockData";
+import { listings as mockListings, type ListingItem } from "../data/mockData";
 import { ItemDetail } from "./ItemDetail";
+import { getListings } from "../lib/listings";
 
 const { width, height } = Dimensions.get("window");
 const CARD_WIDTH = Math.min(width - 32, 380);
@@ -22,6 +23,7 @@ const CARD_HEIGHT = CARD_WIDTH * (4 / 3);
 const SWIPE_THRESHOLD = 100;
 
 export function SwipePage() {
+  const [allItems, setAllItems] = useState<ListingItem[]>(mockListings);
   const [liked, setLiked] = useState<string[]>([]);
   const [passed, setPassed] = useState<string[]>([]);
   const [exitDirection, setExitDirection] = useState<"left" | "right" | null>(null);
@@ -30,7 +32,13 @@ export function SwipePage() {
   const [savedItems, setSavedItems] = useState<string[]>([]);
   const insets = useSafeAreaInsets();
 
-  const availableItems = listings.filter(
+  useEffect(() => {
+    getListings()
+      .then((data) => { if (data.length > 0) setAllItems(data); })
+      .catch(() => {});
+  }, []);
+
+  const availableItems = allItems.filter(
     (item) => !liked.includes(item.id) && !passed.includes(item.id)
   );
 

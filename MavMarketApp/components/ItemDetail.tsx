@@ -10,10 +10,13 @@ import {
 } from "react-native";
 import { ChevronLeft, Heart } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 import { type ListingItem } from "../data/mockData";
 import { StarRating } from "./StarRating";
 import { PickupMap } from "./PickupMap";
 import { ReviewsViewer, generateMockReviews } from "./ReviewsViewer";
+import { useAuth } from "../lib/auth-context";
+import { createConversation } from "../lib/messages";
 
 const { width } = Dimensions.get("window");
 
@@ -26,7 +29,27 @@ interface ItemDetailProps {
 
 export function ItemDetail({ item, onBack, isSaved, onToggleSave }: ItemDetailProps) {
   const [showReviews, setShowReviews] = useState(false);
+  const [messagingLoading, setMessagingLoading] = useState(false);
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+  const router = useRouter();
+
+  const isOwnListing = user && item.sellerId && user.id === item.sellerId;
+  const canMessage = user && item.sellerId && !isOwnListing;
+
+  const handleMessageSeller = async () => {
+    if (!canMessage || !user || !item.sellerId) return;
+    setMessagingLoading(true);
+    try {
+      await createConversation(item.id, user.id, item.sellerId);
+      onBack();
+      router.push("/(tabs)/messages");
+    } catch (err) {
+      console.error("Failed to create conversation:", err);
+    } finally {
+      setMessagingLoading(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -97,8 +120,14 @@ export function ItemDetail({ item, onBack, isSaved, onToggleSave }: ItemDetailPr
 
       {/* Sticky action buttons */}
       <View style={[styles.actions, { paddingBottom: insets.bottom + 8 }]}>
-        <TouchableOpacity style={styles.messageBtnContainer}>
-          <Text style={styles.messageBtnText}>Message Seller</Text>
+        <TouchableOpacity
+          onPress={handleMessageSeller}
+          disabled={messagingLoading || !canMessage}
+          style={[styles.messageBtnContainer, (!canMessage || messagingLoading) && styles.messageBtnDisabled]}
+        >
+          <Text style={styles.messageBtnText}>
+            {isOwnListing ? "Your Listing" : messagingLoading ? "Opening..." : "Message Seller"}
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={onToggleSave} style={styles.saveBtn}>
           <Text style={styles.saveBtnText}>{isSaved ? "Saved" : "Save"}</Text>
@@ -228,6 +257,9 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 10,
     alignItems: "center",
+  },
+  messageBtnDisabled: {
+    backgroundColor: "#6B7280",
   },
   messageBtnText: {
     color: "#FFFFFF",

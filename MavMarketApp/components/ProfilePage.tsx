@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,38 +7,112 @@ import {
   ScrollView,
   StyleSheet,
   Dimensions,
+  Alert,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import {
-  Settings,
-  ArrowLeft,
-} from "lucide-react-native";
-import {
-  currentUser,
-  friends,
-  type UserProfile,
-} from "../data/mockData";
+import { Settings, ArrowLeft } from "lucide-react-native";
+import { currentUser as mockUser, type UserProfile, type ListingItem } from "../data/mockData";
 import { StarRating } from "./StarRating";
 import { ReviewsViewer, generateMockReviews } from "./ReviewsViewer";
+import { EditProfileModal } from "./EditProfileModal";
+import { useAuth } from "../lib/auth-context";
+import { getCurrentUserProfile, getSellerListings } from "../lib/profile";
+import { deleteListing, markListingAsSold } from "../lib/listings";
+import { supabase } from "../lib/supabase";
 
 const { width } = Dimensions.get("window");
 const GRID_CELL = (width - 2) / 3;
 
 export function ProfilePage() {
+  const { user } = useAuth();
+  const insets = useSafeAreaInsets();
+
+  const [profile, setProfile] = useState<UserProfile>(mockUser);
+  const [listings, setListings] = useState<ListingItem[]>(mockUser.listings);
+  const [loadingProfile, setLoadingProfile] = useState(false);
   const [viewingProfile, setViewingProfile] = useState<UserProfile | null>(null);
-  const [followingList, setFollowingList] = useState(friends);
   const [showReviews, setShowReviews] = useState(false);
   const [reviewsFor, setReviewsFor] = useState<{
     name: string;
     rating: number;
     reviewCount: number;
   } | null>(null);
-  const insets = useSafeAreaInsets();
+  const [showEditProfile, setShowEditProfile] = useState(false);
 
-  const handleToggleFollow = (id: string) => {
-    setFollowingList((prev) =>
-      prev.map((f) => (f.id === id ? { ...f, isFollowing: !f.isFollowing } : f))
-    );
+  const loadProfile = useCallback(async () => {
+    if (!user) return;
+    try {
+      setLoadingProfile(true);
+      const [prof, items] = await Promise.all([
+        getCurrentUserProfile(user.id),
+        getSellerListings(user.id),
+      ]);
+      if (prof) setProfile({ ...prof, listings: items });
+      setListings(items);
+    } catch {
+      // keep mock data if DB not connected
+    } finally {
+      setLoadingProfile(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
+
+  const handleMarkSold = (item: ListingItem) => {
+    Alert.alert("Mark as Sold", `Mark "${item.title}" as sold?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Mark Sold",
+        onPress: async () => {
+          try {
+            await markListingAsSold(item.id);
+            setListings((prev) => prev.filter((l) => l.id !== item.id));
+          } catch (e: any) {
+            Alert.alert("Error", e.message);
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleDeleteListing = (item: ListingItem) => {
+    Alert.alert("Delete Listing", `Delete "${item.title}"? This cannot be undone.`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await deleteListing(item.id);
+            setListings((prev) => prev.filter((l) => l.id !== item.id));
+          } catch (e: any) {
+            Alert.alert("Error", e.message);
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleListingLongPress = (item: ListingItem) => {
+    Alert.alert(item.title, "What would you like to do?", [
+      { text: "Mark as Sold", onPress: () => handleMarkSold(item) },
+      { text: "Delete", style: "destructive", onPress: () => handleDeleteListing(item) },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
+
+  const handleSignOut = () => {
+    Alert.alert("Sign Out", "Are you sure you want to sign out?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Sign Out",
+        style: "destructive",
+        onPress: () => supabase.auth.signOut(),
+      },
+    ]);
   };
 
   if (viewingProfile) {
@@ -54,74 +128,109 @@ export function ProfilePage() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.profileHeader}>
-        <Text style={styles.profileUsername}>{currentUser.name.split(" ")[0].toLowerCase()}</Text>
-        <TouchableOpacity style={styles.settingsBtn}>
+        <Text style={styles.profileUsername}>
+          {profile.name.split(" ")[0].toLowerCase()}
+        </Text>
+        <TouchableOpacity onPress={handleSignOut} style={styles.settingsBtn}>
           <Settings size={22} color="#111827" strokeWidth={1.5} />
         </TouchableOpacity>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Profile Info */}
-        <View style={styles.profileInfo}>
-          <View style={styles.profileRow}>
-            <Image source={{ uri: currentUser.avatar }} style={styles.profileAvatar} />
-            <View style={styles.statsRow}>
-              <View style={styles.statItem}>
-                <Text style={styles.statNumber}>{currentUser.listings.length}</Text>
-                <Text style={styles.statLabel}>listings</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statNumber}>{currentUser.followers}</Text>
-                <Text style={styles.statLabel}>followers</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statNumber}>{currentUser.following}</Text>
-                <Text style={styles.statLabel}>following</Text>
+      {loadingProfile ? (
+        <View style={styles.centered}>
+          <ActivityIndicator color="#0064B1" />
+        </View>
+      ) : (
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {/* Profile Info */}
+          <View style={styles.profileInfo}>
+            <View style={styles.profileRow}>
+              {profile.avatar ? (
+                <Image source={{ uri: profile.avatar }} style={styles.profileAvatar} />
+              ) : (
+                <View style={[styles.profileAvatar, styles.avatarPlaceholder]}>
+                  <Text style={styles.avatarInitial}>
+                    {profile.name.charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+              )}
+              <View style={styles.statsRow}>
+                <View style={styles.statItem}>
+                  <Text style={styles.statNumber}>{listings.length}</Text>
+                  <Text style={styles.statLabel}>listings</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Text style={styles.statNumber}>{profile.followers}</Text>
+                  <Text style={styles.statLabel}>followers</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Text style={styles.statNumber}>{profile.following}</Text>
+                  <Text style={styles.statLabel}>following</Text>
+                </View>
               </View>
             </View>
-          </View>
 
-          <View style={styles.bioBlock}>
-            <Text style={styles.bioName}>{currentUser.name}</Text>
-            <Text style={styles.bioText}>{currentUser.bio}</Text>
-            <View style={styles.bioMetaRow}>
-              <Text style={styles.bioMeta}>{currentUser.major}</Text>
-              <Text style={styles.bioMeta}>·</Text>
-              <Text style={styles.bioMeta}>{currentUser.year}</Text>
+            <View style={styles.bioBlock}>
+              <Text style={styles.bioName}>{profile.name}</Text>
+              {profile.bio ? <Text style={styles.bioText}>{profile.bio}</Text> : null}
+              {(profile.major || profile.year) && (
+                <View style={styles.bioMetaRow}>
+                  {profile.major ? <Text style={styles.bioMeta}>{profile.major}</Text> : null}
+                  {profile.major && profile.year ? <Text style={styles.bioMeta}>·</Text> : null}
+                  {profile.year ? <Text style={styles.bioMeta}>{profile.year}</Text> : null}
+                </View>
+              )}
+              <TouchableOpacity
+                onPress={() => {
+                  setReviewsFor({
+                    name: profile.name,
+                    rating: profile.rating,
+                    reviewCount: profile.reviewCount,
+                  });
+                  setShowReviews(true);
+                }}
+                style={styles.ratingBtn}
+              >
+                <StarRating rating={profile.rating} size={11} />
+                <Text style={styles.reviewCountText}>({profile.reviewCount})</Text>
+              </TouchableOpacity>
             </View>
+
             <TouchableOpacity
-              onPress={() => {
-                setReviewsFor({
-                  name: currentUser.name,
-                  rating: currentUser.rating,
-                  reviewCount: currentUser.reviewCount,
-                });
-                setShowReviews(true);
-              }}
-              style={styles.ratingBtn}
+              style={styles.editProfileBtn}
+              onPress={() => setShowEditProfile(true)}
             >
-              <StarRating rating={currentUser.rating} size={11} />
-              <Text style={styles.reviewCountText}>({currentUser.reviewCount})</Text>
+              <Text style={styles.editProfileText}>Edit Profile</Text>
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={styles.editProfileBtn}>
-            <Text style={styles.editProfileText}>Edit Profile</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Listings Grid */}
-        <View style={[styles.listingsGrid, { borderTopWidth: 1, borderTopColor: "#F3F4F6" }]}>
-          {currentUser.listings.map((item) => (
-            <View key={item.id} style={styles.gridCell}>
-              <Image source={{ uri: item.image }} style={styles.gridImage} resizeMode="cover" />
-              <View style={styles.gridPriceBadge}>
-                <Text style={styles.gridPriceText}>${item.price}</Text>
+          {/* Listings Grid */}
+          <View style={[styles.listingsGrid, { borderTopWidth: 1, borderTopColor: "#F3F4F6" }]}>
+            {listings.length === 0 ? (
+              <View style={styles.emptyListings}>
+                <Text style={styles.emptyListingsText}>No listings yet</Text>
+                <Text style={styles.emptyListingsSubtext}>
+                  Tap + on the home screen to post your first item
+                </Text>
               </View>
-            </View>
-          ))}
-        </View>
-      </ScrollView>
+            ) : (
+              listings.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.gridCell}
+                  onLongPress={() => handleListingLongPress(item)}
+                  activeOpacity={0.85}
+                >
+                  <Image source={{ uri: item.image }} style={styles.gridImage} resizeMode="cover" />
+                  <View style={styles.gridPriceBadge}>
+                    <Text style={styles.gridPriceText}>${item.price}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))
+            )}
+          </View>
+        </ScrollView>
+      )}
 
       <ReviewsViewer
         isOpen={showReviews}
@@ -129,6 +238,16 @@ export function ProfilePage() {
         sellerName={reviewsFor?.name || ""}
         overallRating={reviewsFor?.rating || 0}
         reviews={reviewsFor ? generateMockReviews(reviewsFor.name) : []}
+      />
+
+      <EditProfileModal
+        visible={showEditProfile}
+        profile={profile}
+        onClose={() => setShowEditProfile(false)}
+        onSaved={() => {
+          setShowEditProfile(false);
+          loadProfile();
+        }}
       />
     </View>
   );
@@ -155,7 +274,13 @@ function FriendProfile({
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.profileInfo}>
           <View style={styles.profileRow}>
-            <Image source={{ uri: profile.avatar }} style={styles.profileAvatar} />
+            {profile.avatar ? (
+              <Image source={{ uri: profile.avatar }} style={styles.profileAvatar} />
+            ) : (
+              <View style={[styles.profileAvatar, styles.avatarPlaceholder]}>
+                <Text style={styles.avatarInitial}>{profile.name.charAt(0).toUpperCase()}</Text>
+              </View>
+            )}
             <View style={styles.statsRow}>
               <View style={styles.statItem}>
                 <Text style={styles.statNumber}>{profile.listings.length}</Text>
@@ -174,7 +299,7 @@ function FriendProfile({
 
           <View style={styles.bioBlock}>
             <Text style={styles.bioName}>{profile.name}</Text>
-            <Text style={styles.bioText}>{profile.bio}</Text>
+            {profile.bio ? <Text style={styles.bioText}>{profile.bio}</Text> : null}
             <View style={styles.ratingBtn}>
               <StarRating rating={profile.rating} size={11} />
               <Text style={styles.reviewCountText}>({profile.reviewCount})</Text>
@@ -186,7 +311,6 @@ function FriendProfile({
           </TouchableOpacity>
         </View>
 
-        {/* Listings grid */}
         <View style={[styles.listingsGrid, { borderTopWidth: 1, borderTopColor: "#F3F4F6" }]}>
           {profile.listings.map((item) => (
             <View key={item.id} style={styles.gridCell}>
@@ -203,10 +327,8 @@ function FriendProfile({
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-  },
+  container: { flex: 1, backgroundColor: "#FFFFFF" },
+  centered: { flex: 1, justifyContent: "center", alignItems: "center" },
   profileHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -214,76 +336,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
-  profileUsername: {
-    fontSize: 18,
-    color: "#111827",
-  },
-  settingsBtn: {
-    padding: 4,
-  },
-  profileInfo: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  profileRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 20,
-  },
-  profileAvatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    flexShrink: 0,
-  },
-  statsRow: {
-    flex: 1,
-    flexDirection: "row",
-    justifyContent: "space-around",
-  },
-  statItem: {
-    alignItems: "center",
-  },
-  statNumber: {
-    fontSize: 18,
-    color: "#111827",
-    lineHeight: 22,
-  },
-  statLabel: {
-    fontSize: 11,
-    color: "#6B7280",
-  },
-  bioBlock: {
-    marginTop: 12,
-    gap: 3,
-  },
-  bioName: {
-    fontSize: 14,
-    color: "#111827",
-  },
-  bioText: {
-    fontSize: 12,
-    color: "#4B5563",
-  },
-  bioMetaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  bioMeta: {
-    fontSize: 12,
-    color: "#9CA3AF",
-  },
-  ratingBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginTop: 4,
-  },
-  reviewCountText: {
-    fontSize: 11,
-    color: "#9CA3AF",
-  },
+  profileUsername: { fontSize: 18, color: "#111827" },
+  settingsBtn: { padding: 4 },
+  profileInfo: { paddingHorizontal: 16, paddingVertical: 12 },
+  profileRow: { flexDirection: "row", alignItems: "center", gap: 20 },
+  profileAvatar: { width: 80, height: 80, borderRadius: 40, flexShrink: 0 },
+  avatarPlaceholder: { backgroundColor: "#E5E7EB", justifyContent: "center", alignItems: "center" },
+  avatarInitial: { fontSize: 28, color: "#6B7280" },
+  statsRow: { flex: 1, flexDirection: "row", justifyContent: "space-around" },
+  statItem: { alignItems: "center" },
+  statNumber: { fontSize: 18, color: "#111827", lineHeight: 22 },
+  statLabel: { fontSize: 11, color: "#6B7280" },
+  bioBlock: { marginTop: 12, gap: 3 },
+  bioName: { fontSize: 14, color: "#111827" },
+  bioText: { fontSize: 12, color: "#4B5563" },
+  bioMetaRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  bioMeta: { fontSize: 12, color: "#9CA3AF" },
+  ratingBtn: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
+  reviewCountText: { fontSize: 11, color: "#9CA3AF" },
   editProfileBtn: {
     marginTop: 12,
     paddingVertical: 6,
@@ -293,27 +363,10 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: "center",
   },
-  editProfileText: {
-    fontSize: 14,
-    color: "#111827",
-  },
-  // Listings grid
-  listingsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 1,
-    backgroundColor: "#F3F4F6",
-  },
-  gridCell: {
-    width: GRID_CELL,
-    height: GRID_CELL,
-    backgroundColor: "#FFFFFF",
-    position: "relative",
-  },
-  gridImage: {
-    width: GRID_CELL,
-    height: GRID_CELL,
-  },
+  editProfileText: { fontSize: 14, color: "#111827" },
+  listingsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 1, backgroundColor: "#F3F4F6" },
+  gridCell: { width: GRID_CELL, height: GRID_CELL, backgroundColor: "#FFFFFF", position: "relative" },
+  gridImage: { width: GRID_CELL, height: GRID_CELL },
   gridPriceBadge: {
     position: "absolute",
     bottom: 4,
@@ -323,11 +376,15 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 4,
   },
-  gridPriceText: {
-    color: "#FFFFFF",
-    fontSize: 10,
+  gridPriceText: { color: "#FFFFFF", fontSize: 10 },
+  emptyListings: {
+    width: "100%",
+    padding: 32,
+    alignItems: "center",
+    gap: 6,
   },
-  // Friend profile
+  emptyListingsText: { fontSize: 14, color: "#9CA3AF" },
+  emptyListingsSubtext: { fontSize: 12, color: "#D1D5DB", textAlign: "center" },
   friendProfileHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -335,10 +392,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
-  backBtn: {
-    padding: 4,
-    marginLeft: -4,
-  },
+  backBtn: { padding: 4, marginLeft: -4 },
   messageActionBtn: {
     marginTop: 12,
     paddingVertical: 6,
@@ -348,8 +402,5 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: "center",
   },
-  messageActionBtnText: {
-    fontSize: 14,
-    color: "#111827",
-  },
+  messageActionBtnText: { fontSize: 14, color: "#111827" },
 });

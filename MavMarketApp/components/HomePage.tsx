@@ -10,18 +10,24 @@ import {
   StyleSheet,
   Dimensions,
   Animated,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Search, SlidersHorizontal, X, Heart, Menu } from "lucide-react-native";
-import { listings, categories, type ListingItem } from "../data/mockData";
+import { listings as mockListings, categories, type ListingItem } from "../data/mockData";
 import { MavLogo } from "./MavLogo";
 import { ItemDetail } from "./ItemDetail";
 import { SettingsPanel } from "./SettingsPanel";
+import { CreateListingModal } from "./CreateListingModal";
+import { getListings } from "../lib/listings";
+import { useAuth } from "../lib/auth-context";
+import { getSavedListingIds, saveItem, unsaveItem } from "../lib/saved";
 
 const { width } = Dimensions.get("window");
 const CARD_WIDTH = (width - 1) / 2;
 
 export function HomePage() {
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [showFilters, setShowFilters] = useState(false);
@@ -31,9 +37,35 @@ export function HomePage() {
   const [savedItems, setSavedItems] = useState<string[]>([]);
   const [showSearch, setShowSearch] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [allListings, setAllListings] = useState<ListingItem[]>(mockListings);
+  const [loadingListings, setLoadingListings] = useState(false);
   const insets = useSafeAreaInsets();
 
-  const filteredListings = listings.filter((item) => {
+  const loadListings = () => {
+    setLoadingListings(true);
+    getListings()
+      .then((data) => {
+        if (data.length > 0) setAllListings(data);
+      })
+      .catch(() => {
+        // Supabase not configured yet — mock data stays
+      })
+      .finally(() => setLoadingListings(false));
+  };
+
+  useEffect(() => {
+    loadListings();
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    getSavedListingIds(user.id)
+      .then(setSavedItems)
+      .catch(() => {});
+  }, [user]);
+
+  const filteredListings = allListings.filter((item) => {
     const matchesSearch =
       item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.description.toLowerCase().includes(searchQuery.toLowerCase());
@@ -44,9 +76,19 @@ export function HomePage() {
   });
 
   const toggleSave = (id: string) => {
-    setSavedItems((prev) =>
-      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
-    );
+    const isSaved = savedItems.includes(id);
+    setSavedItems((prev) => isSaved ? prev.filter((i) => i !== id) : [...prev, id]);
+    if (user) {
+      if (isSaved) {
+        unsaveItem(user.id, id).catch(() => {
+          setSavedItems((prev) => [...prev, id]); // revert on error
+        });
+      } else {
+        saveItem(user.id, id).catch(() => {
+          setSavedItems((prev) => prev.filter((i) => i !== id)); // revert on error
+        });
+      }
+    }
   };
 
   const renderItem = ({ item }: { item: ListingItem }) => (
@@ -200,18 +242,24 @@ export function HomePage() {
 
       {/* Listings Grid */}
       <FlatList
-        data={filteredListings}
+        data={loadingListings ? [] : filteredListings}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
         numColumns={2}
         columnWrapperStyle={styles.row}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Search size={32} color="#D1D5DB" strokeWidth={1.5} />
-            <Text style={styles.emptyText}>No items found</Text>
-            <Text style={styles.emptySubtext}>Try adjusting your filters</Text>
-          </View>
+          loadingListings ? (
+            <View style={styles.emptyState}>
+              <ActivityIndicator color="#0064B1" />
+            </View>
+          ) : (
+            <View style={styles.emptyState}>
+              <Search size={32} color="#D1D5DB" strokeWidth={1.5} />
+              <Text style={styles.emptyText}>No items found</Text>
+              <Text style={styles.emptySubtext}>Try adjusting your filters</Text>
+            </View>
+          )
         }
         style={styles.list}
       />
@@ -234,6 +282,27 @@ export function HomePage() {
         onClose={() => setShowSettings(false)}
         savedItemIds={savedItems}
         onToggleSave={toggleSave}
+      />
+
+      {/* Create Listing FAB */}
+      {user && (
+        <TouchableOpacity
+          onPress={() => setShowCreate(true)}
+          style={[styles.fab, { bottom: insets.bottom + 72 }]}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.fabIcon}>+</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Create Listing Modal */}
+      <CreateListingModal
+        visible={showCreate}
+        onClose={() => setShowCreate(false)}
+        onCreated={() => {
+          setShowCreate(false);
+          loadListings();
+        }}
       />
     </View>
   );
@@ -442,5 +511,25 @@ const styles = StyleSheet.create({
   emptySubtext: {
     fontSize: 12,
     color: "#D1D5DB",
+  },
+  fab: {
+    position: "absolute",
+    right: 20,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: "#0064B1",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  fabIcon: {
+    fontSize: 28,
+    color: "#FFFFFF",
+    lineHeight: 32,
   },
 });

@@ -10,6 +10,7 @@ export interface ListingItem {
   description: string;
   condition: string;
   postedAt: string;
+  sellerId?: string; // populated when fetched from DB
   pickupLocation: {
     name: string;
     address: string;
