@@ -16,6 +16,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { X, ChevronRight, Bell, Shield, HelpCircle, Info, Heart } from "lucide-react-native";
 import { listings, type ListingItem } from "../data/mockData";
 import { ItemDetail } from "./ItemDetail";
+import { useAuth } from "../lib/auth-context";
+import { getNotificationPreferences, updateNotificationPreferences } from "../lib/profile";
 
 const { width } = Dimensions.get("window");
 
@@ -31,16 +33,36 @@ type ViewMode = "main" | "notifications" | "saved";
 export function SettingsPanel({ isOpen, onClose, savedItemIds, onToggleSave }: SettingsPanelProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("main");
   const [selectedItem, setSelectedItem] = useState<ListingItem | null>(null);
+  const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>({
+    new_messages: true,
+    price_drops: true,
+    new_listings: true,
+    item_sold: true,
+  });
   const insets = useSafeAreaInsets();
   const slideX = useRef(new Animated.Value(width)).current;
+  const { user } = useAuth();
 
   useEffect(() => {
     if (isOpen) {
       Animated.spring(slideX, { toValue: 0, damping: 30, stiffness: 300, useNativeDriver: true }).start();
+      if (user) {
+        getNotificationPreferences(user.id)
+          .then((prefs) => {
+            if (Object.keys(prefs).length > 0) setNotifPrefs((prev) => ({ ...prev, ...prefs }));
+          })
+          .catch(() => {});
+      }
     } else {
       slideX.setValue(width);
     }
-  }, [isOpen]);
+  }, [isOpen, user]);
+
+  const handleNotifToggle = (key: string, value: boolean) => {
+    const updated = { ...notifPrefs, [key]: value };
+    setNotifPrefs(updated);
+    if (user) updateNotificationPreferences(user.id, updated).catch(() => {});
+  };
 
   const savedItems = listings.filter((item) => savedItemIds.includes(item.id));
 
@@ -147,18 +169,26 @@ export function SettingsPanel({ isOpen, onClose, savedItemIds, onToggleSave }: S
               <NotificationToggle
                 label="New Messages"
                 description="Get notified when you receive a message"
+                value={notifPrefs.new_messages ?? true}
+                onChange={(v) => handleNotifToggle("new_messages", v)}
               />
               <NotificationToggle
                 label="Price Drops"
                 description="Alert when saved items go on sale"
+                value={notifPrefs.price_drops ?? true}
+                onChange={(v) => handleNotifToggle("price_drops", v)}
               />
               <NotificationToggle
                 label="New Listings"
                 description="Notify about new items in your categories"
+                value={notifPrefs.new_listings ?? true}
+                onChange={(v) => handleNotifToggle("new_listings", v)}
               />
               <NotificationToggle
                 label="Item Sold"
                 description="Alert when your listing sells"
+                value={notifPrefs.item_sold ?? true}
+                onChange={(v) => handleNotifToggle("item_sold", v)}
               />
             </ScrollView>
           </>
@@ -229,9 +259,17 @@ export function SettingsPanel({ isOpen, onClose, savedItemIds, onToggleSave }: S
   );
 }
 
-function NotificationToggle({ label, description }: { label: string; description: string }) {
-  const [enabled, setEnabled] = useState(true);
-
+function NotificationToggle({
+  label,
+  description,
+  value,
+  onChange,
+}: {
+  label: string;
+  description: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
+}) {
   return (
     <View style={notifStyles.row}>
       <View style={notifStyles.textBlock}>
@@ -239,8 +277,8 @@ function NotificationToggle({ label, description }: { label: string; description
         <Text style={notifStyles.desc}>{description}</Text>
       </View>
       <Switch
-        value={enabled}
-        onValueChange={setEnabled}
+        value={value}
+        onValueChange={onChange}
         trackColor={{ false: "#D1D5DB", true: "#0064B1" }}
         thumbColor="#FFFFFF"
       />

@@ -22,6 +22,7 @@ import {
   getMessages,
   sendMessage,
   subscribeToMessages,
+  markConversationRead,
   type DBConversation,
   type DBMessage,
 } from "../lib/messages";
@@ -127,7 +128,13 @@ export function MessagesPage() {
               }
               renderItem={({ item }) => (
                 <TouchableOpacity
-                  onPress={() => setActiveConvo(item)}
+                  onPress={() => {
+                    setActiveConvo(item);
+                    if (user) markConversationRead(user.id, item.id).catch(() => {});
+                    setConversations((prev) =>
+                      prev.map((c) => (c.id === item.id ? { ...c, unread: 0 } : c))
+                    );
+                  }}
                   style={styles.convoRow}
                   activeOpacity={0.7}
                 >

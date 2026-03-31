@@ -76,6 +76,28 @@ export async function updateUserProfile(
   if (error) throw error;
 }
 
+export async function getNotificationPreferences(
+  userId: string
+): Promise<Record<string, boolean>> {
+  const { data } = await supabase
+    .from("users")
+    .select("notification_preferences")
+    .eq("id", userId)
+    .single();
+  return (data?.notification_preferences as Record<string, boolean>) ?? {};
+}
+
+export async function updateNotificationPreferences(
+  userId: string,
+  prefs: Record<string, boolean>
+): Promise<void> {
+  const { error } = await supabase
+    .from("users")
+    .update({ notification_preferences: prefs })
+    .eq("id", userId);
+  if (error) throw error;
+}
+
 function formatRelativeTime(isoString: string): string {
   const diffMs = Date.now() - new Date(isoString).getTime();
   const hours = Math.floor(diffMs / 3_600_000);

@@ -187,7 +187,29 @@ export function HomePage() {
       {/* Filter Panel */}
       {showFilters && (
         <View style={styles.filterPanel}>
-          <Text style={styles.filterLabel}>Max Price: ${maxPrice}</Text>
+          <Text style={styles.filterLabel}>Max Price</Text>
+          <View style={styles.conditionRow}>
+            {[50, 100, 250, 500, 1000].map((p) => (
+              <TouchableOpacity
+                key={p}
+                onPress={() => setMaxPrice(p)}
+                style={[
+                  styles.conditionChip,
+                  maxPrice === p && styles.conditionChipActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.conditionChipText,
+                    maxPrice === p && styles.conditionChipTextActive,
+                  ]}
+                >
+                  {p === 1000 ? "Any" : `$${p}`}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <Text style={styles.filterLabel}>Condition</Text>
           <View style={styles.conditionRow}>
             {["All", "Like New", "Good", "Fair"].map((c) => (
               <TouchableOpacity

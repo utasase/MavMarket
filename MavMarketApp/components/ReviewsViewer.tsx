@@ -11,14 +11,16 @@ import {
 } from "react-native";
 import { X } from "lucide-react-native";
 import { StarRating } from "./StarRating";
+import { type Review } from "../lib/reviews";
 
-interface Review {
-  id: string;
-  reviewerName: string;
-  reviewerAvatar: string;
-  rating: number;
-  comment: string;
-  date: string;
+function formatRelativeDate(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const days = Math.floor(diff / 86400000);
+  if (days === 0) return "today";
+  if (days === 1) return "1d ago";
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  return months === 1 ? "1mo ago" : `${months}mo ago`;
 }
 
 interface ReviewsViewerProps {
@@ -71,18 +73,28 @@ export function ReviewsViewer({
               <View key={review.id} style={styles.reviewItem}>
                 <View style={styles.reviewRow}>
                   <Image
-                    source={{ uri: review.reviewerAvatar }}
+                    source={{
+                      uri:
+                        review.reviewer?.avatar_url ??
+                        `https://api.dicebear.com/7.x/avataaars/svg?seed=${review.reviewer_id}`,
+                    }}
                     style={styles.avatar}
                   />
                   <View style={styles.reviewContent}>
                     <View style={styles.reviewMeta}>
-                      <Text style={styles.reviewerName}>{review.reviewerName}</Text>
-                      <Text style={styles.reviewDate}>{review.date}</Text>
+                      <Text style={styles.reviewerName}>
+                        {review.reviewer?.name ?? "Anonymous"}
+                      </Text>
+                      <Text style={styles.reviewDate}>
+                        {formatRelativeDate(review.created_at)}
+                      </Text>
                     </View>
                     <View style={styles.reviewStars}>
                       <StarRating rating={review.rating} size={11} showValue={false} />
                     </View>
-                    <Text style={styles.reviewComment}>{review.comment}</Text>
+                    {review.comment ? (
+                      <Text style={styles.reviewComment}>{review.comment}</Text>
+                    ) : null}
                   </View>
                 </View>
               </View>
@@ -92,41 +104,6 @@ export function ReviewsViewer({
       </SafeAreaView>
     </Modal>
   );
-}
-
-export function generateMockReviews(sellerName: string): Review[] {
-  const comments = [
-    "Great seller! Item was exactly as described and in perfect condition.",
-    "Very responsive and easy to work with. Would buy again!",
-    "Item arrived on time and was well-packaged. Highly recommend!",
-    "Smooth transaction, no issues at all. Thanks!",
-    "Product was as advertised. Quick and easy pickup.",
-    "Excellent communication throughout the process.",
-    "Item was better than expected! Very happy with my purchase.",
-    "Fast replies and fair pricing. Will buy from again.",
-  ];
-
-  const names = [
-    "Sarah Johnson",
-    "Michael Chen",
-    "Emily Rodriguez",
-    "David Thompson",
-    "Jessica Lee",
-    "Ryan Martinez",
-    "Amanda Wilson",
-    "Chris Anderson",
-  ];
-
-  const avatarSeeds = [1, 2, 3, 4, 5, 6, 7, 8];
-
-  return Array.from({ length: 6 }, (_, i) => ({
-    id: `review-${i}`,
-    reviewerName: names[i % names.length],
-    reviewerAvatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${avatarSeeds[i % avatarSeeds.length]}`,
-    rating: Math.random() > 0.3 ? 5 : Math.random() > 0.5 ? 4 : 3,
-    comment: comments[i % comments.length],
-    date: `${Math.floor(Math.random() * 30) + 1}d ago`,
-  }));
 }
 
 const styles = StyleSheet.create({

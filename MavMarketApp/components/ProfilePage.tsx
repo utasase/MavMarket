@@ -14,7 +14,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Settings, ArrowLeft } from "lucide-react-native";
 import { currentUser as mockUser, type UserProfile, type ListingItem } from "../data/mockData";
 import { StarRating } from "./StarRating";
-import { ReviewsViewer, generateMockReviews } from "./ReviewsViewer";
+import { ReviewsViewer } from "./ReviewsViewer";
+import { getReviews, type Review } from "../lib/reviews";
+import { createReport, REPORT_REASONS } from "../lib/reports";
 import { EditProfileModal } from "./EditProfileModal";
 import { useAuth } from "../lib/auth-context";
 import { getCurrentUserProfile, getSellerListings } from "../lib/profile";
@@ -33,6 +35,7 @@ export function ProfilePage() {
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [viewingProfile, setViewingProfile] = useState<UserProfile | null>(null);
   const [showReviews, setShowReviews] = useState(false);
+  const [dbReviews, setDbReviews] = useState<Review[]>([]);
   const [reviewsFor, setReviewsFor] = useState<{
     name: string;
     rating: number;
@@ -44,12 +47,14 @@ export function ProfilePage() {
     if (!user) return;
     try {
       setLoadingProfile(true);
-      const [prof, items] = await Promise.all([
+      const [prof, items, reviews] = await Promise.all([
         getCurrentUserProfile(user.id),
         getSellerListings(user.id),
+        getReviews(user.id),
       ]);
       if (prof) setProfile({ ...prof, listings: items });
       setListings(items);
+      setDbReviews(reviews);
     } catch {
       // keep mock data if DB not connected
     } finally {
@@ -237,7 +242,7 @@ export function ProfilePage() {
         onClose={() => { setShowReviews(false); setReviewsFor(null); }}
         sellerName={reviewsFor?.name || ""}
         overallRating={reviewsFor?.rating || 0}
-        reviews={reviewsFor ? generateMockReviews(reviewsFor.name) : []}
+        reviews={dbReviews}
       />
 
       <EditProfileModal
@@ -261,6 +266,31 @@ function FriendProfile({
   onBack: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const [friendReviews, setFriendReviews] = useState<Review[]>([]);
+  const [showFriendReviews, setShowFriendReviews] = useState(false);
+
+  useEffect(() => {
+    getReviews(profile.id)
+      .then(setFriendReviews)
+      .catch(() => {});
+  }, [profile.id]);
+
+  const handleReportUser = () => {
+    Alert.alert("Report User", "Why are you reporting this user?", [
+      ...REPORT_REASONS.map((reason) => ({
+        text: reason,
+        onPress: async () => {
+          try {
+            await createReport({ targetType: "user", targetId: profile.id, reason });
+            Alert.alert("Reported", "Thanks for letting us know. We'll review this account.");
+          } catch {
+            Alert.alert("Error", "Failed to submit report. Please try again.");
+          }
+        },
+      })),
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -300,15 +330,25 @@ function FriendProfile({
           <View style={styles.bioBlock}>
             <Text style={styles.bioName}>{profile.name}</Text>
             {profile.bio ? <Text style={styles.bioText}>{profile.bio}</Text> : null}
-            <View style={styles.ratingBtn}>
+            <TouchableOpacity
+              onPress={() => setShowFriendReviews(true)}
+              style={styles.ratingBtn}
+            >
               <StarRating rating={profile.rating} size={11} />
-              <Text style={styles.reviewCountText}>({profile.reviewCount})</Text>
-            </View>
+              <Text style={styles.reviewCountText}>
+                ({friendReviews.length > 0 ? friendReviews.length : profile.reviewCount})
+              </Text>
+            </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={styles.messageActionBtn}>
-            <Text style={styles.messageActionBtnText}>Message</Text>
-          </TouchableOpacity>
+          <View style={styles.friendActions}>
+            <TouchableOpacity style={[styles.messageActionBtn, { flex: 1 }]}>
+              <Text style={styles.messageActionBtnText}>Message</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleReportUser} style={styles.reportActionBtn}>
+              <Text style={styles.reportActionBtnText}>Report</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={[styles.listingsGrid, { borderTopWidth: 1, borderTopColor: "#F3F4F6" }]}>
@@ -322,6 +362,14 @@ function FriendProfile({
           ))}
         </View>
       </ScrollView>
+
+      <ReviewsViewer
+        isOpen={showFriendReviews}
+        onClose={() => setShowFriendReviews(false)}
+        sellerName={profile.name}
+        overallRating={profile.rating}
+        reviews={friendReviews}
+      />
     </View>
   );
 }
@@ -393,8 +441,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   backBtn: { padding: 4, marginLeft: -4 },
-  messageActionBtn: {
+  friendActions: {
+    flexDirection: "row",
+    gap: 8,
     marginTop: 12,
+  },
+  messageActionBtn: {
     paddingVertical: 6,
     backgroundColor: "#F9FAFB",
     borderWidth: 1,
@@ -403,4 +455,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   messageActionBtnText: { fontSize: 14, color: "#111827" },
+  reportActionBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  reportActionBtnText: { fontSize: 14, color: "#9CA3AF" },
 });

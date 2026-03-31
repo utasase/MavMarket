@@ -13,13 +13,14 @@ All app code lives in `MavMarketApp/`. Run all commands from that directory.
 ```bash
 cd MavMarketApp
 
-# Start dev server (choose platform)
-npx expo start
-npx expo start --android
-npx expo start --ios
-
 # Install dependencies
 npm install
+
+# Start dev server (choose platform)
+npm run start        # or: npx expo start
+npm run android
+npm run ios
+npm run web
 ```
 
 No linting or test runner is configured.
@@ -40,6 +41,10 @@ npx supabase db reset   # requires supabase CLI and local Docker
 ```
 
 ## Architecture
+
+### Entry Point
+
+`package.json` sets `"main": "expo-router/entry"` — Expo Router owns the entry point. `App.tsx` in `MavMarketApp/` is an unused Expo scaffold remnant; ignore it.
 
 ### Routing vs. Components
 
@@ -72,7 +77,7 @@ Email validation enforces `@mavs.uta.edu` or `@uta.edu` on signup.
 |------|---------|
 | `lib/supabase.ts` | Supabase client with AsyncStorage session persistence |
 | `lib/auth-context.tsx` | React context for session state |
-| `lib/listings.ts` | `getListings()`, `createListing()`, `deleteListing()`, `markListingAsSold()` |
+| `lib/listings.ts` | `getListings()`, `createListing()`, `deleteListing()`, `markListingAsSold()` — listing status: `draft \| active \| reserved \| sold \| removed` |
 | `lib/messages.ts` | Conversations CRUD, `sendMessage()`, `subscribeToMessages()` (realtime), `createConversation()` |
 | `lib/profile.ts` | `getCurrentUserProfile()`, `getSellerListings()`, `updateUserProfile()` |
 | `lib/saved.ts` | `getSavedListingIds()`, `saveItem()`, `unsaveItem()` — requires `saved_items` table (see migration below) |
@@ -105,6 +110,26 @@ create policy "saved_items_delete" on public.saved_items for delete to authentic
 ```
 
 Supabase Storage: enable the `listings` bucket (public) in the Supabase dashboard. Authenticated users need insert permission on the bucket to upload listing/avatar images.
+
+### Supabase Migrations
+
+Two `supabase/` directories exist:
+- `MavMarketApp/supabase/migrations/` — app-level migrations (use these)
+- Root-level `supabase/` — separate config, likely for local dev with the Supabase CLI
+
+### Agent Coordination System
+
+`MavMarketApp/agents/` defines a multi-agent build orchestration system for developing this app in bounded increments:
+
+- `manifest.json` — canonical list of 10 agents, their phases, dependencies, and handoff targets
+- `contracts.md` — **read this before editing shared interfaces** — stable boundaries all agents must respect (auth model, data shapes, RLS invariants, messaging contracts, moderation statuses)
+- `orchestrator.md` — sequencing rules, conflict resolution, and release gates
+- `runbooks/` — phase-scoped execution plans
+- `specs/` — per-agent acceptance criteria
+
+Agent execution order (all phase 1 unless noted): `orchestrator-agent` → `backend-schema-agent` → `security-agent` → `mobile-foundation-agent` → `auth-agent` → `marketplace-agent` → `messaging-agent` → `profile-trust-agent` → `moderation-admin-agent` → `platform-release-agent` → `payment-architecture-agent` (phase 2, architecture-only).
+
+When implementing any feature that touches auth, listings, messaging, or moderation, check `agents/contracts.md` first to ensure compliance with shared invariants.
 
 ### Key Patterns
 

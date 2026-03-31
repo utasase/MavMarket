@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,16 +7,23 @@ import {
   ScrollView,
   Dimensions,
   StyleSheet,
+  Alert,
+  Modal,
+  SafeAreaView,
+  TextInput,
+  ActivityIndicator,
 } from "react-native";
-import { ChevronLeft, Heart } from "lucide-react-native";
+import { ChevronLeft, Heart, Flag, Star } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { type ListingItem } from "../data/mockData";
 import { StarRating } from "./StarRating";
 import { PickupMap } from "./PickupMap";
-import { ReviewsViewer, generateMockReviews } from "./ReviewsViewer";
+import { ReviewsViewer } from "./ReviewsViewer";
 import { useAuth } from "../lib/auth-context";
 import { createConversation } from "../lib/messages";
+import { getReviews, createReview, hasReviewed, type Review } from "../lib/reviews";
+import { createReport, REPORT_REASONS } from "../lib/reports";
 
 const { width } = Dimensions.get("window");
 
@@ -30,12 +37,30 @@ interface ItemDetailProps {
 export function ItemDetail({ item, onBack, isSaved, onToggleSave }: ItemDetailProps) {
   const [showReviews, setShowReviews] = useState(false);
   const [messagingLoading, setMessagingLoading] = useState(false);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [showLeaveReview, setShowLeaveReview] = useState(false);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [alreadyReviewed, setAlreadyReviewed] = useState(false);
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const router = useRouter();
 
   const isOwnListing = user && item.sellerId && user.id === item.sellerId;
   const canMessage = user && item.sellerId && !isOwnListing;
+
+  useEffect(() => {
+    if (!item.sellerId) return;
+    getReviews(item.sellerId)
+      .then(setReviews)
+      .catch(() => {});
+    if (user && !isOwnListing) {
+      hasReviewed(item.sellerId, item.id)
+        .then(setAlreadyReviewed)
+        .catch(() => {});
+    }
+  }, [item.sellerId, item.id, user, isOwnListing]);
 
   const handleMessageSeller = async () => {
     if (!canMessage || !user || !item.sellerId) return;
@@ -50,6 +75,51 @@ export function ItemDetail({ item, onBack, isSaved, onToggleSave }: ItemDetailPr
       setMessagingLoading(false);
     }
   };
+
+  const handleReport = () => {
+    Alert.alert("Report Listing", "Why are you reporting this listing?", [
+      ...REPORT_REASONS.map((reason) => ({
+        text: reason,
+        onPress: async () => {
+          try {
+            await createReport({ targetType: "listing", targetId: item.id, reason });
+            Alert.alert("Reported", "Thanks for letting us know. We'll review this listing.");
+          } catch {
+            Alert.alert("Error", "Failed to submit report. Please try again.");
+          }
+        },
+      })),
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
+
+  const handleSubmitReview = async () => {
+    if (!item.sellerId) return;
+    setReviewSubmitting(true);
+    try {
+      await createReview({
+        sellerId: item.sellerId,
+        listingId: item.id,
+        rating: reviewRating,
+        comment: reviewComment.trim(),
+      });
+      setShowLeaveReview(false);
+      setReviewComment("");
+      setAlreadyReviewed(true);
+      // Refresh reviews
+      const updated = await getReviews(item.sellerId);
+      setReviews(updated);
+    } catch (err: any) {
+      Alert.alert("Error", err.message ?? "Failed to submit review.");
+    } finally {
+      setReviewSubmitting(false);
+    }
+  };
+
+  const sellerRating =
+    reviews.length > 0
+      ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+      : item.sellerRating;
 
   return (
     <View style={styles.container}>
@@ -102,9 +172,20 @@ export function ItemDetail({ item, onBack, isSaved, onToggleSave }: ItemDetailPr
             <View style={styles.sellerInfo}>
               <Text style={styles.sellerName}>{item.sellerName}</Text>
               <TouchableOpacity onPress={() => setShowReviews(true)}>
-                <StarRating rating={item.sellerRating} size={11} />
+                <StarRating rating={sellerRating} size={11} />
               </TouchableOpacity>
             </View>
+            {canMessage && !alreadyReviewed && (
+              <TouchableOpacity
+                onPress={() => setShowLeaveReview(true)}
+                style={styles.reviewCta}
+              >
+                <Text style={styles.reviewCtaText}>Leave review</Text>
+              </TouchableOpacity>
+            )}
+            {canMessage && alreadyReviewed && (
+              <Text style={styles.reviewedBadge}>Reviewed</Text>
+            )}
           </View>
 
           {/* Description */}
@@ -112,6 +193,14 @@ export function ItemDetail({ item, onBack, isSaved, onToggleSave }: ItemDetailPr
 
           {/* Pickup Location */}
           <PickupMap location={item.pickupLocation} />
+
+          {/* Report link */}
+          {!isOwnListing && (
+            <TouchableOpacity onPress={handleReport} style={styles.reportRow}>
+              <Flag size={13} color="#9CA3AF" strokeWidth={1.5} />
+              <Text style={styles.reportText}>Report this listing</Text>
+            </TouchableOpacity>
+          )}
 
           {/* Bottom spacer for action buttons */}
           <View style={{ height: 80 }} />
@@ -139,9 +228,71 @@ export function ItemDetail({ item, onBack, isSaved, onToggleSave }: ItemDetailPr
         isOpen={showReviews}
         onClose={() => setShowReviews(false)}
         sellerName={item.sellerName}
-        overallRating={item.sellerRating}
-        reviews={generateMockReviews(item.sellerName)}
+        overallRating={sellerRating}
+        reviews={reviews}
       />
+
+      {/* Leave Review Modal */}
+      <Modal
+        visible={showLeaveReview}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowLeaveReview(false)}
+      >
+        <SafeAreaView style={styles.reviewModal}>
+          <View style={styles.reviewModalHeader}>
+            <Text style={styles.reviewModalTitle}>Review {item.sellerName}</Text>
+            <TouchableOpacity
+              onPress={() => setShowLeaveReview(false)}
+              style={styles.reviewModalClose}
+            >
+              <Text style={styles.reviewModalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.reviewModalBody}>
+            {/* Star picker */}
+            <View style={styles.starPicker}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <TouchableOpacity
+                  key={star}
+                  onPress={() => setReviewRating(star)}
+                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                >
+                  <Star
+                    size={36}
+                    color={reviewRating >= star ? "#FACC15" : "#E5E7EB"}
+                    fill={reviewRating >= star ? "#FACC15" : "#E5E7EB"}
+                  />
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <TextInput
+              style={styles.reviewInput}
+              placeholder="Share your experience (optional)"
+              placeholderTextColor="#9CA3AF"
+              value={reviewComment}
+              onChangeText={setReviewComment}
+              multiline
+              numberOfLines={4}
+              maxLength={500}
+            />
+
+            <TouchableOpacity
+              onPress={handleSubmitReview}
+              disabled={reviewSubmitting}
+              style={[styles.submitReviewBtn, reviewSubmitting && styles.submitReviewBtnDisabled]}
+            >
+              {reviewSubmitting ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <Text style={styles.submitReviewBtnText}>Submit Review</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
     </View>
   );
 }
@@ -233,10 +384,35 @@ const styles = StyleSheet.create({
     color: "#111827",
     marginBottom: 2,
   },
+  reviewCta: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 8,
+  },
+  reviewCtaText: {
+    fontSize: 12,
+    color: "#374151",
+  },
+  reviewedBadge: {
+    fontSize: 12,
+    color: "#9CA3AF",
+  },
   description: {
     fontSize: 14,
     color: "#4B5563",
     lineHeight: 22,
+  },
+  reportRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 4,
+  },
+  reportText: {
+    fontSize: 13,
+    color: "#9CA3AF",
   },
   actions: {
     position: "absolute",
@@ -276,5 +452,62 @@ const styles = StyleSheet.create({
   saveBtnText: {
     fontSize: 14,
     color: "#374151",
+  },
+  // Review modal
+  reviewModal: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+  },
+  reviewModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  reviewModalTitle: {
+    fontSize: 17,
+    color: "#111827",
+  },
+  reviewModalClose: {
+    padding: 4,
+  },
+  reviewModalCancelText: {
+    fontSize: 15,
+    color: "#6B7280",
+  },
+  reviewModalBody: {
+    padding: 24,
+    gap: 20,
+  },
+  starPicker: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 8,
+  },
+  reviewInput: {
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 14,
+    color: "#111827",
+    textAlignVertical: "top",
+    minHeight: 100,
+  },
+  submitReviewBtn: {
+    backgroundColor: "#111827",
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  submitReviewBtnDisabled: {
+    backgroundColor: "#6B7280",
+  },
+  submitReviewBtnText: {
+    color: "#FFFFFF",
+    fontSize: 15,
   },
 });

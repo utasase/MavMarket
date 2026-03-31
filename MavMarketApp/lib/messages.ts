@@ -22,29 +22,45 @@ export interface DBMessage {
 }
 
 export async function getConversations(userId: string): Promise<DBConversation[]> {
-  const { data, error } = await supabase
-    .from("conversations")
-    .select(`
-      id,
-      last_message,
-      last_message_time,
-      buyer_id,
-      seller_id,
-      listing_id,
-      buyer:users!conversations_buyer_id_fkey(name, avatar_url),
-      seller:users!conversations_seller_id_fkey(name, avatar_url),
-      listing:listings(title, image_url)
-    `)
-    .or(`buyer_id.eq.${userId},seller_id.eq.${userId}`)
-    .order("last_message_time", { ascending: false });
+  const [convResult, readsResult] = await Promise.all([
+    supabase
+      .from("conversations")
+      .select(`
+        id,
+        last_message,
+        last_message_time,
+        buyer_id,
+        seller_id,
+        listing_id,
+        buyer:users!conversations_buyer_id_fkey(name, avatar_url),
+        seller:users!conversations_seller_id_fkey(name, avatar_url),
+        listing:listings(title, image_url)
+      `)
+      .or(`buyer_id.eq.${userId},seller_id.eq.${userId}`)
+      .order("last_message_time", { ascending: false }),
+    supabase
+      .from("message_reads")
+      .select("conversation_id, last_read_at")
+      .eq("user_id", userId),
+  ]);
 
-  if (error) throw error;
-  if (!data) return [];
+  if (convResult.error) throw convResult.error;
+  if (!convResult.data) return [];
 
-  return data.map((row: any) => {
+  const readMap = new Map(
+    (readsResult.data ?? []).map((r) => [r.conversation_id, r.last_read_at])
+  );
+
+  return convResult.data.map((row: any) => {
     const isBuyer = row.buyer_id === userId;
     const contact = isBuyer ? row.seller : row.buyer;
     const contactId = isBuyer ? row.seller_id : row.buyer_id;
+    const lastReadAt = readMap.get(row.id);
+    const unread =
+      row.last_message_time &&
+      (!lastReadAt || new Date(row.last_message_time) > new Date(lastReadAt))
+        ? 1
+        : 0;
     return {
       id: row.id,
       contactName: contact?.name ?? "Unknown",
@@ -54,12 +70,24 @@ export async function getConversations(userId: string): Promise<DBConversation[]
       lastMessageTime: row.last_message_time
         ? new Date(row.last_message_time).toLocaleDateString()
         : "",
-      unread: 0,
+      unread,
       itemTitle: row.listing?.title ?? "",
       itemImage: row.listing?.image_url ?? "",
       listingId: row.listing_id ?? "",
     };
   });
+}
+
+export async function markConversationRead(
+  userId: string,
+  conversationId: string
+): Promise<void> {
+  await supabase
+    .from("message_reads")
+    .upsert(
+      { user_id: userId, conversation_id: conversationId, last_read_at: new Date().toISOString() },
+      { onConflict: "user_id,conversation_id" }
+    );
 }
 
 export async function getMessages(conversationId: string): Promise<DBMessage[]> {

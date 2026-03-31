@@ -81,7 +81,7 @@ export function SwipePage() {
 
   // Results screen
   if (showResults || (!currentItem && (liked.length > 0 || passed.length > 0))) {
-    const likedItems = listings.filter((item) => liked.includes(item.id));
+    const likedItems = allItems.filter((item) => liked.includes(item.id));
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.resultsHeader}>
