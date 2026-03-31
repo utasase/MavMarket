@@ -4,7 +4,7 @@
     "strict": true,
     "jsx": "react-native",
     "paths": {
-x      "@/*": ["./*"]
+      "@/*": ["./*"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"]
