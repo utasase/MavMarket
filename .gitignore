@@ -1,0 +1,11 @@
+# Dependencies
+node_modules/
+
+# Root-level auto-generated lockfile (app lockfile in MavMarketApp/ is kept)
+/package-lock.json
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# macOS
+.DS_Store
