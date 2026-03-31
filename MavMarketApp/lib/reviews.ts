@@ -19,7 +19,7 @@ export async function getReviews(sellerId: string): Promise<Review[]> {
     .order("created_at", { ascending: false });
 
   if (error) throw error;
-  return data as Review[];
+  return (data ?? []) as Review[];
 }
 
 export async function createReview(params: {
