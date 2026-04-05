@@ -116,10 +116,21 @@ export async function sendMessage(
   senderId: string,
   text: string
 ): Promise<void> {
+  // Rate limit: max 30 messages per 60 seconds
+  const { data: limited } = await supabase.rpc("is_rate_limited", {
+    p_user_id: senderId,
+    p_action: "send_message",
+    p_max_count: 30,
+    p_window_secs: 60,
+  });
+  if (limited) throw new Error("You're sending messages too fast. Please slow down.");
+
   const { error: msgError } = await supabase
     .from("messages")
     .insert({ conversation_id: conversationId, sender_id: senderId, text });
   if (msgError) throw msgError;
+
+  await supabase.from("rate_limit_log").insert({ user_id: senderId, action: "send_message" });
 
   const { error: convError } = await supabase
     .from("conversations")
@@ -169,6 +180,32 @@ export async function createConversation(
       { listing_id: listingId, buyer_id: buyerId, seller_id: sellerId },
       { onConflict: "listing_id,buyer_id,seller_id" }
     )
+    .select("id")
+    .single();
+
+  if (error) throw error;
+  return data.id;
+}
+
+export async function findOrCreateDirectConversation(
+  currentUserId: string,
+  otherUserId: string
+): Promise<string> {
+  const { data: existing } = await supabase
+    .from("conversations")
+    .select("id")
+    .is("listing_id", null)
+    .or(
+      `and(buyer_id.eq.${currentUserId},seller_id.eq.${otherUserId}),` +
+      `and(buyer_id.eq.${otherUserId},seller_id.eq.${currentUserId})`
+    )
+    .maybeSingle();
+
+  if (existing) return existing.id;
+
+  const { data, error } = await supabase
+    .from("conversations")
+    .insert({ listing_id: null, buyer_id: currentUserId, seller_id: otherUserId })
     .select("id")
     .single();
 

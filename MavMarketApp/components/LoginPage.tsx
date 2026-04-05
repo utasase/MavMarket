@@ -157,7 +157,7 @@ export function LoginPage() {
             <View style={styles.inputWrapper}>
               <Lock size={16} color="#9CA3AF" style={styles.inputIcon} />
               <TextInput
-                style={[styles.input, { flex: 1, paddingRight: 40 }]}
+                style={styles.input}
                 placeholder="At least 6 characters"
                 placeholderTextColor="#9CA3AF"
                 value={password}
@@ -236,7 +236,7 @@ const styles = StyleSheet.create({
   inputWrapper: { flexDirection: "row", alignItems: "center", backgroundColor: "#F9FAFB", borderWidth: 1, borderColor: "#F3F4F6", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, position: "relative" },
   inputIcon: { marginRight: 8 },
   input: { flex: 1, fontSize: 14, color: "#111827", padding: 0 },
-  eyeBtn: { position: "absolute", right: 14, top: "50%", marginTop: -8 },
+  eyeBtn: { marginLeft: 8, padding: 2 },
   errorText: { fontSize: 12, color: "#EF4444" },
   successText: { fontSize: 12, color: "#16A34A" },
   forgotBtn: { alignSelf: "flex-end" },

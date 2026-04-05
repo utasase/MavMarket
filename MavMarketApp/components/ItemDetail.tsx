@@ -167,7 +167,15 @@ export function ItemDetail({ item, onBack, isSaved, onToggleSave }: ItemDetailPr
           </View>
 
           {/* Seller */}
-          <View style={styles.sellerRow}>
+          <TouchableOpacity
+            style={styles.sellerRow}
+            onPress={() => {
+              if (!isOwnListing && item.sellerId) {
+                router.push(`/(tabs)/profile?userId=${item.sellerId}` as any);
+              }
+            }}
+            activeOpacity={isOwnListing ? 1 : 0.7}
+          >
             <Image source={{ uri: item.sellerAvatar }} style={styles.sellerAvatar} />
             <View style={styles.sellerInfo}>
               <Text style={styles.sellerName}>{item.sellerName}</Text>
@@ -186,7 +194,7 @@ export function ItemDetail({ item, onBack, isSaved, onToggleSave }: ItemDetailPr
             {canMessage && alreadyReviewed && (
               <Text style={styles.reviewedBadge}>Reviewed</Text>
             )}
-          </View>
+          </TouchableOpacity>
 
           {/* Description */}
           <Text style={styles.description}>{item.description}</Text>

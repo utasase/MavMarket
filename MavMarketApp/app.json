@@ -13,7 +13,8 @@
       "backgroundColor": "#0064B1"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.chatillyes.MavMarketApp"
     },
     "android": {
       "adaptiveIcon": {

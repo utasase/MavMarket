@@ -14,10 +14,11 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { X, ChevronRight, Bell, Shield, HelpCircle, Info, Heart } from "lucide-react-native";
-import { listings, type ListingItem } from "../data/mockData";
+import { type ListingItem } from "../data/mockData";
 import { ItemDetail } from "./ItemDetail";
 import { useAuth } from "../lib/auth-context";
 import { getNotificationPreferences, updateNotificationPreferences } from "../lib/profile";
+import { supabase } from "../lib/supabase";
 
 const { width } = Dimensions.get("window");
 
@@ -30,9 +31,63 @@ interface SettingsPanelProps {
 
 type ViewMode = "main" | "notifications" | "saved";
 
+// Fetch the full listing rows for a set of IDs from Supabase.
+// Returns an empty array on any error so the UI degrades gracefully.
+async function fetchSavedListings(ids: string[]): Promise<ListingItem[]> {
+  if (ids.length === 0) return [];
+  const { data, error } = await supabase
+    .from("listings")
+    .select(`
+      id,
+      title,
+      price,
+      image_url,
+      category,
+      condition,
+      description,
+      created_at,
+      status,
+      seller_id,
+      pickup_location_name,
+      pickup_location_address,
+      is_on_campus,
+      seller:users(name, avatar_url, rating)
+    `)
+    .in("id", ids);
+
+  if (error || !data) return [];
+
+  const UTA_LAT = 32.7299;
+  const UTA_LNG = -97.1149;
+
+  return data.map((row: any) => ({
+    id: row.id,
+    title: row.title,
+    price: row.price,
+    image: row.image_url ?? "",
+    category: row.category,
+    condition: row.condition,
+    description: row.description ?? "",
+    postedAt: "",
+    sellerId: row.seller_id,
+    sellerName: row.seller?.name ?? "Unknown",
+    sellerAvatar: row.seller?.avatar_url ?? "",
+    sellerRating: row.seller?.rating ?? 0,
+    isSold: row.status === "sold",
+    pickupLocation: {
+      name: row.pickup_location_name ?? "On Campus",
+      address: row.pickup_location_address ?? "UTA Campus, Arlington TX",
+      lat: UTA_LAT,
+      lng: UTA_LNG,
+      isOnCampus: row.is_on_campus ?? true,
+    },
+  }));
+}
+
 export function SettingsPanel({ isOpen, onClose, savedItemIds, onToggleSave }: SettingsPanelProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("main");
   const [selectedItem, setSelectedItem] = useState<ListingItem | null>(null);
+  const [savedItems, setSavedItems] = useState<ListingItem[]>([]);
   const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>({
     new_messages: true,
     price_drops: true,
@@ -53,18 +108,20 @@ export function SettingsPanel({ isOpen, onClose, savedItemIds, onToggleSave }: S
           })
           .catch(() => {});
       }
+      // Fetch live data for saved listing IDs from the DB.
+      fetchSavedListings(savedItemIds)
+        .then(setSavedItems)
+        .catch(() => setSavedItems([]));
     } else {
       slideX.setValue(width);
     }
-  }, [isOpen, user]);
+  }, [isOpen, user, savedItemIds]);
 
   const handleNotifToggle = (key: string, value: boolean) => {
     const updated = { ...notifPrefs, [key]: value };
     setNotifPrefs(updated);
     if (user) updateNotificationPreferences(user.id, updated).catch(() => {});
   };
-
-  const savedItems = listings.filter((item) => savedItemIds.includes(item.id));
 
   const handleClose = () => {
     setViewMode("main");

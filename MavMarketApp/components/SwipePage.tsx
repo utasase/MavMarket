@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -143,7 +143,7 @@ export function SwipePage() {
           onPress={() => setShowResults(true)}
           style={styles.likedCountBtn}
         >
-          <Heart size={16} color="#6B7280" strokeWidth={1.5} />
+          <Heart size={16} color="#0064B1" fill="#0064B1" strokeWidth={1.5} />
           <Text style={styles.likedCountText}>{liked.length}</Text>
         </TouchableOpacity>
       </View>
@@ -186,27 +186,27 @@ export function SwipePage() {
       {/* Action Buttons */}
       {currentItem && (
         <View style={[styles.actionBtns, { paddingBottom: insets.bottom + 8 }]}>
-          <TouchableOpacity onPress={handleUndo} style={styles.actionBtnSmall}>
+          <SpringActionButton onPress={handleUndo} style={styles.actionBtnSmall}>
             <RotateCcw size={18} color="#9CA3AF" />
-          </TouchableOpacity>
-          <TouchableOpacity
+          </SpringActionButton>
+          <SpringActionButton
             onPress={() => handleSwipe("left")}
-            style={styles.actionBtnLarge}
+            style={[styles.actionBtnLarge, styles.passBtn]}
           >
-            <X size={26} color="#9CA3AF" />
-          </TouchableOpacity>
-          <TouchableOpacity
+            <X size={26} color="#F87171" />
+          </SpringActionButton>
+          <SpringActionButton
             onPress={() => handleSwipe("right")}
-            style={styles.actionBtnLarge}
+            style={[styles.actionBtnLarge, styles.wantBtnAction]}
           >
-            <Heart size={26} color="#9CA3AF" />
-          </TouchableOpacity>
-          <TouchableOpacity
+            <Heart size={26} color="#0064B1" />
+          </SpringActionButton>
+          <SpringActionButton
             onPress={() => setShowResults(true)}
             style={styles.actionBtnSmall}
           >
             <ShoppingBag size={18} color="#9CA3AF" />
-          </TouchableOpacity>
+          </SpringActionButton>
         </View>
       )}
     </View>
@@ -262,6 +262,8 @@ function SwipeCard({
     } else {
       Animated.spring(translateX, {
         toValue: 0,
+        damping: 18,
+        stiffness: 260,
         useNativeDriver: true,
       }).start();
     }
@@ -282,10 +284,14 @@ function SwipeCard({
         } else {
           Animated.spring(translateX, {
             toValue: 0,
+            damping: 18,
+            stiffness: 260,
             useNativeDriver: true,
           }).start();
           Animated.spring(translateY, {
             toValue: 0,
+            damping: 18,
+            stiffness: 260,
             useNativeDriver: true,
           }).start();
         }
@@ -339,6 +345,36 @@ function SwipeCard({
           </View>
         </View>
       </View>
+    </Animated.View>
+  );
+}
+
+function SpringActionButton({
+  children,
+  onPress,
+  style,
+}: {
+  children: React.ReactNode;
+  onPress: () => void;
+  style?: any;
+}) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const handlePressIn = () =>
+    Animated.spring(scale, { toValue: 0.87, useNativeDriver: true, speed: 60, bounciness: 4 }).start();
+  const handlePressOut = () =>
+    Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 10 }).start();
+
+  return (
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <TouchableOpacity
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        activeOpacity={1}
+        style={style}
+      >
+        {children}
+      </TouchableOpacity>
     </Animated.View>
   );
 }
@@ -416,7 +452,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   startOverBtn: {
-    backgroundColor: "#111827",
+    backgroundColor: "#0064B1",
     paddingVertical: 14,
     borderRadius: 10,
     alignItems: "center",
@@ -424,6 +460,7 @@ const styles = StyleSheet.create({
   startOverBtnText: {
     color: "#FFFFFF",
     fontSize: 14,
+    fontWeight: "600",
   },
   // Discover
   discoverHeader: {
@@ -441,10 +478,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
+    backgroundColor: "#EFF6FF",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
   },
   likedCountText: {
     fontSize: 14,
-    color: "#6B7280",
+    color: "#0064B1",
+    fontWeight: "600",
   },
   swipeArea: {
     flex: 1,
@@ -473,7 +515,7 @@ const styles = StyleSheet.create({
     color: "#9CA3AF",
   },
   startOverSmallBtn: {
-    backgroundColor: "#111827",
+    backgroundColor: "#0064B1",
     paddingHorizontal: 24,
     paddingVertical: 10,
     borderRadius: 10,
@@ -482,6 +524,7 @@ const styles = StyleSheet.create({
   startOverSmallText: {
     color: "#FFFFFF",
     fontSize: 14,
+    fontWeight: "600",
   },
   actionBtns: {
     flexDirection: "row",
@@ -501,13 +544,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   actionBtnLarge: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     borderWidth: 2,
     borderColor: "#E5E7EB",
     justifyContent: "center",
     alignItems: "center",
+    backgroundColor: "#FFFFFF",
+  },
+  passBtn: {
+    borderColor: "#FECACA",
+    backgroundColor: "#FFF5F5",
+  },
+  wantBtnAction: {
+    borderColor: "#BFDBFE",
+    backgroundColor: "#EFF6FF",
   },
   // Swipe card
   swipeCard: {

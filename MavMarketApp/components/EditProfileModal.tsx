@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { X, Camera } from "lucide-react-native";
 import { type UserProfile } from "../data/mockData";
 import { updateUserProfile } from "../lib/profile";
-import { pickAndUploadListingImage } from "../lib/storage";
+import { pickAndUploadAvatarImage } from "../lib/storage";
 import { useAuth } from "../lib/auth-context";
 
 interface Props {
@@ -52,7 +52,7 @@ export function EditProfileModal({ visible, profile, onClose, onSaved }: Props) 
     try {
       setUploadingAvatar(true);
       setError("");
-      const url = await pickAndUploadListingImage();
+      const url = await pickAndUploadAvatarImage(user!.id);
       if (url) setAvatarUrl(url);
     } catch (err: any) {
       setError(err.message ?? "Failed to upload photo.");

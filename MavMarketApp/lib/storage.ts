@@ -1,15 +1,10 @@
 import * as ImagePicker from "expo-image-picker";
 import { supabase } from "./supabase";
 
-/**
- * Opens the device image picker, uploads the selected image to Supabase Storage
- * under the "listings" bucket, and returns the public URL.
- * Returns null if the user cancels.
- */
-export async function pickAndUploadListingImage(): Promise<string | null> {
+async function pickImage(): Promise<ImagePicker.ImagePickerAsset | null> {
   const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (!permission.granted) {
-    throw new Error("Photo library access is required to add a listing image.");
+    throw new Error("Photo library access is required to upload an image.");
   }
 
   const result = await ImagePicker.launchImageLibraryAsync({
@@ -20,20 +15,39 @@ export async function pickAndUploadListingImage(): Promise<string | null> {
   });
 
   if (result.canceled) return null;
+  return result.assets[0];
+}
 
-  const asset = result.assets[0];
-  const ext = asset.uri.split(".").pop() ?? "jpg";
-  const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-
-  const response = await fetch(asset.uri);
+async function uploadToStorage(userId: string, path: string, uri: string, ext: string): Promise<string> {
+  const response = await fetch(uri);
   const blob = await response.blob();
 
   const { error } = await supabase.storage
     .from("listings")
-    .upload(fileName, blob, { contentType: `image/${ext}` });
+    .upload(path, blob, { contentType: `image/${ext}`, upsert: true });
 
   if (error) throw error;
 
-  const { data } = supabase.storage.from("listings").getPublicUrl(fileName);
+  const { data } = supabase.storage.from("listings").getPublicUrl(path);
   return data.publicUrl;
+}
+
+export async function pickAndUploadListingImage(userId: string): Promise<string | null> {
+  const asset = await pickImage();
+  if (!asset) return null;
+
+  const ext = asset.uri.split(".").pop() ?? "jpg";
+  const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+
+  return uploadToStorage(userId, path, asset.uri, ext);
+}
+
+export async function pickAndUploadAvatarImage(userId: string): Promise<string | null> {
+  const asset = await pickImage();
+  if (!asset) return null;
+
+  const ext = asset.uri.split(".").pop() ?? "jpg";
+  const path = `${userId}/avatar-${Date.now()}.${ext}`;
+
+  return uploadToStorage(userId, path, asset.uri, ext);
 }

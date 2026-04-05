@@ -71,7 +71,7 @@ export function CreateListingModal({ visible, onClose, onCreated }: Props) {
     try {
       setUploading(true);
       setError("");
-      const url = await pickAndUploadListingImage();
+      const url = await pickAndUploadListingImage(user!.id);
       if (url) setImageUrl(url);
     } catch (err: any) {
       setError(err.message ?? "Failed to upload image.");

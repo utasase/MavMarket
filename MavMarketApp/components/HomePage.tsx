@@ -18,7 +18,6 @@ import { listings as mockListings, categories, type ListingItem } from "../data/
 import { MavLogo } from "./MavLogo";
 import { ItemDetail } from "./ItemDetail";
 import { SettingsPanel } from "./SettingsPanel";
-import { CreateListingModal } from "./CreateListingModal";
 import { getListings } from "../lib/listings";
 import { useAuth } from "../lib/auth-context";
 import { getSavedListingIds, saveItem, unsaveItem } from "../lib/saved";
@@ -37,7 +36,6 @@ export function HomePage() {
   const [savedItems, setSavedItems] = useState<string[]>([]);
   const [showSearch, setShowSearch] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [showCreate, setShowCreate] = useState(false);
   const [allListings, setAllListings] = useState<ListingItem[]>(mockListings);
   const [loadingListings, setLoadingListings] = useState(false);
   const insets = useSafeAreaInsets();
@@ -92,43 +90,12 @@ export function HomePage() {
   };
 
   const renderItem = ({ item }: { item: ListingItem }) => (
-    <TouchableOpacity
+    <AnimatedCard
+      item={item}
+      isSaved={savedItems.includes(item.id)}
       onPress={() => setSelectedItem(item)}
-      style={styles.card}
-      activeOpacity={0.9}
-    >
-      <View style={styles.cardImageContainer}>
-        <Image
-          source={{ uri: item.image }}
-          style={styles.cardImage}
-          resizeMode="cover"
-        />
-        <TouchableOpacity
-          onPress={() => toggleSave(item.id)}
-          style={styles.heartBtn}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Heart
-            size={20}
-            color={savedItems.includes(item.id) ? "#EF4444" : "#FFFFFF"}
-            fill={savedItems.includes(item.id) ? "#EF4444" : "transparent"}
-            strokeWidth={1.5}
-          />
-        </TouchableOpacity>
-        <View style={styles.priceBadge}>
-          <Text style={styles.priceBadgeText}>${item.price}</Text>
-        </View>
-      </View>
-      <View style={styles.cardCaption}>
-        <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
-        <View style={styles.cardSellerRow}>
-          <Image source={{ uri: item.sellerAvatar }} style={styles.cardSellerAvatar} />
-          <Text style={styles.cardSellerName}>{item.sellerName}</Text>
-          <Text style={styles.cardDot}>·</Text>
-          <Text style={styles.cardPostedAt}>{item.postedAt}</Text>
-        </View>
-      </View>
-    </TouchableOpacity>
+      onToggleSave={() => toggleSave(item.id)}
+    />
   );
 
   return (
@@ -305,41 +272,103 @@ export function HomePage() {
         savedItemIds={savedItems}
         onToggleSave={toggleSave}
       />
-
-      {/* Create Listing FAB */}
-      {user && (
-        <TouchableOpacity
-          onPress={() => setShowCreate(true)}
-          style={[styles.fab, { bottom: insets.bottom + 72 }]}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.fabIcon}>+</Text>
-        </TouchableOpacity>
-      )}
-
-      {/* Create Listing Modal */}
-      <CreateListingModal
-        visible={showCreate}
-        onClose={() => setShowCreate(false)}
-        onCreated={() => {
-          setShowCreate(false);
-          loadListings();
-        }}
-      />
     </View>
   );
 }
 
 function SlideUpOverlay({ children }: { children: React.ReactNode }) {
-  const translateY = useRef(new Animated.Value(800)).current;
+  const translateY = useRef(new Animated.Value(900)).current;
   useEffect(() => {
-    Animated.spring(translateY, { toValue: 0, damping: 30, stiffness: 300, useNativeDriver: true }).start();
+    Animated.spring(translateY, {
+      toValue: 0,
+      damping: 22,
+      stiffness: 280,
+      mass: 0.9,
+      useNativeDriver: true,
+    }).start();
   }, []);
   return (
     <Animated.View style={[StyleSheet.absoluteFillObject, { transform: [{ translateY }] }]}>
       {children}
     </Animated.View>
   );
+}
+
+function AnimatedCard({
+  item,
+  isSaved,
+  onPress,
+  onToggleSave,
+}: {
+  item: ListingItem;
+  isSaved: boolean;
+  onPress: () => void;
+  onToggleSave: () => void;
+}) {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(scale, { toValue: 0.96, useNativeDriver: true, speed: 60, bounciness: 4 }).start();
+  };
+  const handlePressOut = () => {
+    Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 8 }).start();
+  };
+
+  return (
+    <Animated.View style={[styles.card, { transform: [{ scale }] }]}>
+      <TouchableOpacity
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        activeOpacity={1}
+      >
+        <View style={styles.cardImageContainer}>
+          <Image source={{ uri: item.image }} style={styles.cardImage} resizeMode="cover" />
+          <TouchableOpacity
+            onPress={onToggleSave}
+            style={styles.heartBtn}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Heart
+              size={20}
+              color={isSaved ? "#EF4444" : "#FFFFFF"}
+              fill={isSaved ? "#EF4444" : "transparent"}
+              strokeWidth={1.5}
+            />
+          </TouchableOpacity>
+          <View style={styles.priceBadge}>
+            <Text style={styles.priceBadgeText}>${item.price}</Text>
+          </View>
+        </View>
+        <View style={styles.cardCaption}>
+          <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
+          <View style={styles.cardMeta}>
+            <View style={[styles.conditionPill, { backgroundColor: conditionColor(item.condition) + "22" }]}>
+              <Text style={[styles.conditionPillText, { color: conditionColor(item.condition) }]}>
+                {item.condition}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.cardSellerRow}>
+            <Image source={{ uri: item.sellerAvatar }} style={styles.cardSellerAvatar} />
+            <Text style={styles.cardSellerName}>{item.sellerName}</Text>
+            <Text style={styles.cardDot}>·</Text>
+            <Text style={styles.cardPostedAt}>{item.postedAt}</Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
+function conditionColor(condition: string): string {
+  switch (condition) {
+    case "New": return "#0064B1";
+    case "Like New": return "#059669";
+    case "Good": return "#D97706";
+    case "Fair": return "#9CA3AF";
+    default: return "#9CA3AF";
+  }
 }
 
 const styles = StyleSheet.create({
@@ -411,7 +440,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#F3F4F6",
   },
   conditionChipActive: {
-    backgroundColor: "#111827",
+    backgroundColor: "#0064B1",
+    borderColor: "#0064B1",
   },
   conditionChipText: {
     fontSize: 12,
@@ -440,8 +470,8 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
   },
   categoryChipActive: {
-    backgroundColor: "#111827",
-    borderColor: "#111827",
+    backgroundColor: "#0064B1",
+    borderColor: "#0064B1",
   },
   categoryChipText: {
     fontSize: 12,
@@ -449,6 +479,7 @@ const styles = StyleSheet.create({
   },
   categoryChipTextActive: {
     color: "#FFFFFF",
+    fontWeight: "600",
   },
   list: {
     flex: 1,
@@ -496,6 +527,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#111827",
   },
+  cardMeta: {
+    flexDirection: "row",
+    gap: 4,
+    marginTop: 3,
+    marginBottom: 1,
+  },
+  conditionPill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    alignSelf: "flex-start",
+  },
+  conditionPillText: {
+    fontSize: 10,
+    fontWeight: "600",
+  },
   cardSellerRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -533,25 +580,5 @@ const styles = StyleSheet.create({
   emptySubtext: {
     fontSize: 12,
     color: "#D1D5DB",
-  },
-  fab: {
-    position: "absolute",
-    right: 20,
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: "#0064B1",
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  fabIcon: {
-    fontSize: 28,
-    color: "#FFFFFF",
-    lineHeight: 32,
   },
 });

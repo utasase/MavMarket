@@ -1,77 +1,56 @@
 ---
-name: MavMarket project overview
-description: Core facts about the MavMarket React Native / Expo iOS app — stack, structure, and what has been cleaned up
+name: MavMarket Project State
+description: Stack, architecture, wiring status, and key gaps for the MavMarket Expo/RN app — audited 2026-04-04
 type: project
 ---
 
-MavMarket is a university marketplace iOS app built with Expo (SDK 54) and expo-router v6 (file-based routing). The project lives at `/Users/chatchawanillyes/Desktop/rigTest/RigProject/MavMarket`.
+MavMarket is a Facebook Marketplace-style mobile app for UTA (University of Texas at Arlington) students. Expo SDK 55 + Expo Router + Supabase. All app code lives in `MavMarketApp/`. Root is `/Users/chatchawanillyes/Desktop/rigTest/RigProject/MavMarketApp/`.
 
-**Why:** University-focused marketplace (MavMarket = Mavericks branding). iOS-first but technically cross-platform via Expo.
+**Why:** University-exclusive marketplace enforcing @mavs.uta.edu / @uta.edu email validation.
 
-**Stack:**
-- React 19 / React Native 0.81 / Expo SDK 54
-- expo-router v6 (file-based, typed routes enabled)
-- react-native-reanimated v4 + react-native-gesture-handler
-- react-native-safe-area-context + react-native-screens
-- expo-symbols (SF Symbols on iOS), @expo/vector-icons (MaterialIcons fallback)
-- expo-haptics (haptic feedback on tab press)
-- TypeScript strict mode; path alias `@/` maps to project root
+**How to apply:** When recommending changes, always verify against the 7 existing migrations (all applied) and the contracts in `agents/contracts.md`. The DB schema is stable — focus on wiring the app to it correctly.
 
-**Architecture — routing:**
-- `app/_layout.tsx` — root Stack; wraps in ThemeProvider (dark/light). Declares `(auth)`, `(tabs)`, and `modal` screens. Auth redirect logic is a stub (TODO comment); implement by reading session token here and using `<Redirect>` to `(auth)/login`.
-- `app/(auth)/_layout.tsx` — Stack for auth screens (headerShown: false)
-- `app/(auth)/login.tsx` — Login screen stub (.edu email + password fields)
-- `app/(auth)/register.tsx` — Register screen stub (name + .edu email + password fields)
-- `app/(tabs)/_layout.tsx` — bottom tab navigator (Home, Explore)
-- `app/(tabs)/index.tsx` — Home screen stub
-- `app/(tabs)/explore.tsx` — Explore/browse stub
-- `app/modal.tsx` — modal screen stub
+## Stack
+- Expo SDK 55 / React Native 0.83.2 / React 19
+- Expo Router (file-based routing) — `app/` files are thin wrappers, all logic in `components/`
+- Supabase JS v2 + AsyncStorage session persistence
+- lucide-react-native icons, UTA blue = `#0064B1`
+- No linter configured; jest configured but no coverage enforced
 
-**Kept components (reusable foundations):**
-- `components/themed-text.tsx` — Text with theme-aware color + type variants (title, subtitle, defaultSemiBold, link)
-- `components/themed-view.tsx` — View with theme-aware background
-- `components/haptic-tab.tsx` — Tab bar button with iOS haptic on press
-- `components/ui/icon-symbol.ios.tsx` — SF Symbols wrapper (iOS native)
-- `components/ui/icon-symbol.tsx` — MaterialIcons fallback (Android/web)
+## Auth Flow
+SplashScreen → LoginPage (if no session) → Tab Navigator (Home, Discover, Messages, Profile).
+AuthProvider in `lib/auth-context.tsx` exposes `useAuth()` → `{ session, user, loading }`.
+Email validation (@mavs.uta.edu or @uta.edu) is client-side only in LoginPage — NOT enforced at DB/RLS level.
+Auto-user-creation trigger (`handle_new_user`) fires on `auth.users` insert, populating `public.users`.
 
-**Constants / hooks:**
-- `constants/theme.ts` — `Colors` (light/dark palettes) + `Fonts` (iOS system font families: sans, serif, rounded, mono)
-- `hooks/use-color-scheme.ts` — re-exports RN `useColorScheme`
-- `hooks/use-color-scheme.web.ts` — hydration-safe web variant
-- `hooks/use-theme-color.ts` — resolves a color from `Colors` given the current scheme
+## Database (7 migrations, all applied)
+Core tables: users, listings, conversations, messages, notifications, saved_items, reviews, reports, message_reads, moderation_actions, audit_events.
+`listings.status` is an enum (draft|active|reserved|sold|removed) — migration 20240006 replaced the old `is_sold` boolean.
+RLS enabled on all tables. Realtime enabled on `messages`.
 
-**Cleanup performed (2026-03-19):**
-Removed all Expo default boilerplate: HelloWave, ParallaxScrollView, ExternalLink, Collapsible, demo screen content, react-logo images, reset-project script. Screen files replaced with minimal stubs. `package.json` scripts trimmed to `start`, `ios`, `lint`.
+## Wiring Status (audited 2026-04-04)
 
-**Backend: Supabase**
-- Auth backend is Supabase. `.edu` email enforcement is handled server-side by Supabase; no client-side email regex needed or wanted.
-- Session-check / auth redirect logic in root `_layout.tsx` is intentionally deferred — do not scaffold it until the user requests it.
+### FULLY WIRED
+- Auth: login, signup, forgot password, sign out (supabase.auth.signInWithPassword / signUp)
+- Listings: getListings, createListing, deleteListing, markListingAsSold, updateListingStatus
+- Messages: getConversations, getMessages, sendMessage, subscribeToMessages (realtime), createConversation, markConversationRead
+- Saved items: getSavedListingIds, saveItem, unsaveItem — all wired in HomePage with optimistic UI
+- Reviews: getReviews, createReview, hasReviewed — wired in ItemDetail (leave review modal + duplicate guard)
+- Reports: createReport — wired in ItemDetail (report listing) and ProfilePage FriendProfile (report user)
+- Profile: getCurrentUserProfile, updateUserProfile, getSellerListings — wired in ProfilePage + EditProfileModal
+- Notifications: getNotifications, markNotificationAsRead — wired in MessagesPage
+- Notification preferences: getNotificationPreferences, updateNotificationPreferences — wired in SettingsPanel
+- Moderation: getOpenReports, takeModAction, isCurrentUserAdmin — wired in ProfilePage + AdminModerationPanel
+- Image upload: pickAndUploadListingImage — wired in CreateListingModal + EditProfileModal (avatar)
+- Mock data fallback: all components silently fall back to mockData if Supabase not configured
 
-**Auth group added + Android stripped (2026-03-19):**
-- Added `app/(auth)/` group with `_layout.tsx`, `login.tsx`, `register.tsx`
-- Registered `(auth)` in root `_layout.tsx` alongside `(tabs)`
-- Removed `android-icon-background.png`, `android-icon-foreground.png`, `android-icon-monochrome.png` from `assets/images/`
-- Stripped entire `android` block from `app.json`; `userInterfaceStyle: "automatic"` retained for dark mode support
-- Future brand colors: blue/yellow (exact values TBD, awaiting design files)
-
-**Login/Register navigation wired (2026-03-19):**
-- Both screens import `useRouter` from `expo-router`
-- Login "Register" link calls `router.push('/(auth)/register')`
-- Register "Sign In" link calls `router.push('/(auth)/login')`
-- All TODO comments removed from both files
-
-**UI design implementation (2026-03-19):**
-Full MavMarket UI from design files has been implemented. The project now has a complete, functional UI:
-
-- **Colors**: `constants/colors.ts` — flat UTA-branded palette (utaBlue, utaOrange, grays, etc.). `constants/theme.ts` (old light/dark palette) kept intact for hook compatibility but is no longer used by screens.
-- **Mock data**: `constants/mockData.ts` — ListingItem, Conversation, UserProfile, Notification interfaces + 10 listings, 3 conversations, 1 currentUser, 2 friends, 4 notifications.
-- **New components**: `ItemDetail`, `MavLogo`, `PickupMap`, `ReviewsViewer`, `SettingsPanel`, `StarRating` — all in `components/`.
-- **Tab structure replaced**: 4 tabs — Home (index), Discover (swipe cards), Messages, Profile. `explore.tsx` deleted; `_layout.tsx` rebuilt with lucide-react-native icons, no labels, UTA-blue active tint.
-- **Root layout**: Rebuilt with `GestureHandlerRootView` (required for swipe gestures), removed ThemeProvider/DarkTheme (design is light-only).
-- **Login screen**: Rebuilt — welcome splash → login/signup form flow with UTA email validation, animated transitions, MavLogo component.
-- **Discover tab**: Swipe card UX. Uses `Gesture.Pan()` + `GestureDetector` (react-native-gesture-handler v2.28) + Reanimated 4 `useAnimatedStyle`. The old `useAnimatedGestureHandler` API was intentionally NOT used — it was removed in Reanimated 4.
-- **New packages installed**: `lucide-react-native`, `react-native-svg`, `@react-native-community/slider`.
-
-**Key compatibility note:** Reanimated 4.x removed `useAnimatedGestureHandler` and `PanGestureHandler`. Use `Gesture.Pan()` + `GestureDetector` from react-native-gesture-handler instead.
-
-**How to apply:** When adding new screens, use ThemedText/ThemedView for automatic dark mode. Use IconSymbol (SF Symbols name) for icons. HapticTab is already wired into the tab bar. New screens should import Colors from `constants/colors.ts` (flat palette), not `constants/theme.ts`.
+### GAPS / KNOWN ISSUES
+1. **App crashes without .env.local** — `lib/supabase.ts` uses non-null assertions (`!`) on EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY. If either is undefined, createClient gets undefined strings and crashes at module load time before any try/catch can help.
+2. **SettingsPanel saved items use mock data** — `SettingsPanel.tsx` line 67: `const savedItems = listings.filter(...)` pulls from `data/mockData` listings import, not live DB listings. The panel displays mock items regardless of what the user has actually saved.
+3. **"Message" button in FriendProfile is a no-op** — `ProfilePage.tsx` FriendProfile has a "Message" TouchableOpacity with no onPress handler.
+4. **Email restriction not server-enforced** — @mavs.uta.edu / @uta.edu check only happens client-side. Anyone can call the Supabase API directly and sign up with any email.
+5. **Storage bucket RLS not locked down** — listings bucket is public; noted as pending security task in CLAUDE.md.
+6. **Rate limiting deferred** — `rate_limit_log` / `is_rate_limited()` migration not applied; in agents/runbooks/release-checklist.md.
+7. **Seller profile navigation missing from ItemDetail** — ItemDetail shows seller name/avatar but has no tap action. FriendProfile component exists in ProfilePage but is unreachable from ItemDetail.
+8. **`followers` / `following` always 0** — no followers/following columns in the DB; getCurrentUserProfile hardcodes these to 0.
+9. **Avatar uploads go to listings bucket** — EditProfileModal calls `pickAndUploadListingImage()` for avatars; avatars land in the listings bucket with no namespacing.

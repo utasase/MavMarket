@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useLocalSearchParams } from "expo-router";
 import { ArrowLeft, Send, Camera, Bell } from "lucide-react-native";
 import { type Notification } from "../data/mockData";
 import { useAuth } from "../lib/auth-context";
@@ -34,6 +35,7 @@ type Tab = "messages" | "notifications";
 
 export function MessagesPage() {
   const { user } = useAuth();
+  const { conversationId: pendingConversationId } = useLocalSearchParams<{ conversationId?: string }>();
   const [activeTab, setActiveTab] = useState<Tab>("messages");
   const [activeConvo, setActiveConvo] = useState<DBConversation | null>(null);
   const [conversations, setConversations] = useState<DBConversation[]>([]);
@@ -43,17 +45,43 @@ export function MessagesPage() {
 
   const unreadCount = notificationsList.filter((n) => !n.read).length;
 
+  const loadConversations = useCallback(async () => {
+    if (!user) return [];
+    setLoadingConvos(true);
+    try {
+      const convos = await getConversations(user.id);
+      setConversations(convos);
+      return convos;
+    } catch (e) {
+      console.error(e);
+      return [];
+    } finally {
+      setLoadingConvos(false);
+    }
+  }, [user]);
+
   useEffect(() => {
     if (!user) return;
-    setLoadingConvos(true);
-    getConversations(user.id)
-      .then(setConversations)
-      .catch(console.error)
-      .finally(() => setLoadingConvos(false));
+    loadConversations();
     getNotifications(user.id)
       .then(setNotificationsList)
       .catch(() => {});
   }, [user]);
+
+  // Open a specific conversation when navigated from another screen
+  useEffect(() => {
+    if (!pendingConversationId || !user) return;
+    const open = (convos: DBConversation[]) => {
+      const convo = convos.find((c) => c.id === pendingConversationId);
+      if (convo) setActiveConvo(convo);
+    };
+    const existing = conversations.find((c) => c.id === pendingConversationId);
+    if (existing) {
+      setActiveConvo(existing);
+    } else {
+      loadConversations().then(open);
+    }
+  }, [pendingConversationId, user]);
 
   const handleMarkAsRead = (id: string) => {
     setNotificationsList((prev) =>
@@ -417,9 +445,9 @@ const styles = StyleSheet.create({
   listTitle: { fontSize: 18, color: "#111827" },
   tabBar: { flexDirection: "row", width: width, borderBottomWidth: 1, borderBottomColor: "#F3F4F6", backgroundColor: "#FFFFFF" },
   tabBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: "transparent", gap: 6 },
-  tabBtnActive: { borderBottomColor: "#111827" },
+  tabBtnActive: { borderBottomColor: "#0064B1" },
   tabLabel: { fontSize: 14, color: "#9CA3AF" },
-  tabLabelActive: { color: "#111827" },
+  tabLabelActive: { color: "#0064B1", fontWeight: "600" },
   notifBadge: { backgroundColor: "#EF4444", minWidth: 16, height: 16, borderRadius: 8, justifyContent: "center", alignItems: "center", paddingHorizontal: 3 },
   notifBadgeText: { color: "#FFFFFF", fontSize: 10 },
   emptyState: { flex: 1, height: 200, alignItems: "center", justifyContent: "center", paddingHorizontal: 32, gap: 8 },
@@ -472,7 +500,7 @@ const styles = StyleSheet.create({
   msgRowRight: { alignItems: "flex-end" },
   msgRowLeft: { alignItems: "flex-start" },
   msgBubble: { maxWidth: "75%", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 18 },
-  msgBubbleMe: { backgroundColor: "#111827", borderBottomRightRadius: 4 },
+  msgBubbleMe: { backgroundColor: "#0064B1", borderBottomRightRadius: 4 },
   msgBubbleOther: { backgroundColor: "#F3F4F6", borderBottomLeftRadius: 4 },
   msgText: { fontSize: 14, lineHeight: 20 },
   msgTextMe: { color: "#FFFFFF" },

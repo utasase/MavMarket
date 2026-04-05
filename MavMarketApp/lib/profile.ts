@@ -5,28 +5,65 @@ const UTA_LAT = 32.7299;
 const UTA_LNG = -97.1149;
 
 export async function getCurrentUserProfile(userId: string): Promise<UserProfile | null> {
-  const { data, error } = await supabase
-    .from("users")
-    .select("id, name, avatar_url, rating, review_count, bio, major, year")
-    .eq("id", userId)
-    .single();
+  const [userResult, followersResult, followingResult] = await Promise.all([
+    supabase
+      .from("users")
+      .select("id, name, avatar_url, rating, review_count, bio, major, year")
+      .eq("id", userId)
+      .single(),
+    supabase
+      .from("follows")
+      .select("*", { count: "exact", head: true })
+      .eq("following_id", userId),
+    supabase
+      .from("follows")
+      .select("*", { count: "exact", head: true })
+      .eq("follower_id", userId),
+  ]);
 
-  if (error) throw error;
-  if (!data) return null;
+  if (userResult.error) throw userResult.error;
+  if (!userResult.data) return null;
 
+  const data = userResult.data;
   return {
     id: data.id,
     name: data.name ?? "",
     avatar: data.avatar_url ?? "",
     rating: data.rating ?? 0,
     reviewCount: data.review_count ?? 0,
-    followers: 0,
-    following: 0,
+    followers: followersResult.count ?? 0,
+    following: followingResult.count ?? 0,
     bio: data.bio ?? "",
     major: data.major ?? "",
     year: data.year ?? "",
     listings: [],
   };
+}
+
+export async function isFollowing(followerId: string, followingId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from("follows")
+    .select("follower_id")
+    .eq("follower_id", followerId)
+    .eq("following_id", followingId)
+    .maybeSingle();
+  return !!data;
+}
+
+export async function followUser(followerId: string, followingId: string): Promise<void> {
+  const { error } = await supabase
+    .from("follows")
+    .insert({ follower_id: followerId, following_id: followingId });
+  if (error) throw error;
+}
+
+export async function unfollowUser(followerId: string, followingId: string): Promise<void> {
+  const { error } = await supabase
+    .from("follows")
+    .delete()
+    .eq("follower_id", followerId)
+    .eq("following_id", followingId);
+  if (error) throw error;
 }
 
 export async function getSellerListings(sellerId: string): Promise<ListingItem[]> {

@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { Settings, ArrowLeft, Shield } from "lucide-react-native";
 import { currentUser as mockUser, type UserProfile, type ListingItem } from "../data/mockData";
 import { StarRating } from "./StarRating";
@@ -19,11 +20,12 @@ import { getReviews, type Review } from "../lib/reviews";
 import { createReport, REPORT_REASONS } from "../lib/reports";
 import { EditProfileModal } from "./EditProfileModal";
 import { useAuth } from "../lib/auth-context";
-import { getCurrentUserProfile, getSellerListings } from "../lib/profile";
+import { getCurrentUserProfile, getSellerListings, isFollowing, followUser, unfollowUser } from "../lib/profile";
 import { deleteListing, markListingAsSold } from "../lib/listings";
 import { isCurrentUserAdmin } from "../lib/moderation";
 import { AdminModerationPanel } from "./AdminModerationPanel";
 import { supabase } from "../lib/supabase";
+import { findOrCreateDirectConversation } from "../lib/messages";
 
 const { width } = Dimensions.get("window");
 const GRID_CELL = (width - 2) / 3;
@@ -31,6 +33,8 @@ const GRID_CELL = (width - 2) / 3;
 export function ProfilePage() {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const { userId: sellerUserId } = useLocalSearchParams<{ userId?: string }>();
 
   const [profile, setProfile] = useState<UserProfile>(mockUser);
   const [listings, setListings] = useState<ListingItem[]>(mockUser.listings);
@@ -71,6 +75,19 @@ export function ProfilePage() {
   useEffect(() => {
     loadProfile();
   }, [loadProfile]);
+
+  // Show another user's profile when navigated here with a userId param
+  useEffect(() => {
+    if (!sellerUserId || sellerUserId === user?.id) return;
+    Promise.all([
+      getCurrentUserProfile(sellerUserId),
+      getSellerListings(sellerUserId),
+    ])
+      .then(([prof, items]) => {
+        if (prof) setViewingProfile({ ...prof, listings: items });
+      })
+      .catch(() => {});
+  }, [sellerUserId, user]);
 
   const handleMarkSold = (item: ListingItem) => {
     Alert.alert("Mark as Sold", `Mark "${item.title}" as sold?`, [
@@ -134,7 +151,10 @@ export function ProfilePage() {
     return (
       <FriendProfile
         profile={viewingProfile}
-        onBack={() => setViewingProfile(null)}
+        onBack={() => {
+          setViewingProfile(null);
+          router.replace("/(tabs)/profile" as any);
+        }}
       />
     );
   }
@@ -284,8 +304,54 @@ function FriendProfile({
   onBack: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+  const router = useRouter();
   const [friendReviews, setFriendReviews] = useState<Review[]>([]);
   const [showFriendReviews, setShowFriendReviews] = useState(false);
+  const [messagingLoading, setMessagingLoading] = useState(false);
+  const [following, setFollowing] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
+  const [followerCount, setFollowerCount] = useState(profile.followers);
+
+  useEffect(() => {
+    if (!user) return;
+    isFollowing(user.id, profile.id)
+      .then(setFollowing)
+      .catch(() => {});
+  }, [user, profile.id]);
+
+  const handleFollowToggle = async () => {
+    if (!user) return;
+    setFollowLoading(true);
+    try {
+      if (following) {
+        await unfollowUser(user.id, profile.id);
+        setFollowing(false);
+        setFollowerCount((c) => Math.max(0, c - 1));
+      } else {
+        await followUser(user.id, profile.id);
+        setFollowing(true);
+        setFollowerCount((c) => c + 1);
+      }
+    } catch {
+      Alert.alert("Error", "Could not update follow status. Please try again.");
+    } finally {
+      setFollowLoading(false);
+    }
+  };
+
+  const handleMessage = async () => {
+    if (!user) return;
+    setMessagingLoading(true);
+    try {
+      const conversationId = await findOrCreateDirectConversation(user.id, profile.id);
+      router.push(`/(tabs)/messages?conversationId=${conversationId}` as any);
+    } catch {
+      Alert.alert("Error", "Could not open conversation. Please try again.");
+    } finally {
+      setMessagingLoading(false);
+    }
+  };
 
   useEffect(() => {
     getReviews(profile.id)
@@ -335,7 +401,7 @@ function FriendProfile({
                 <Text style={styles.statLabel}>listings</Text>
               </View>
               <View style={styles.statItem}>
-                <Text style={styles.statNumber}>{profile.followers}</Text>
+                <Text style={styles.statNumber}>{followerCount}</Text>
                 <Text style={styles.statLabel}>followers</Text>
               </View>
               <View style={styles.statItem}>
@@ -360,8 +426,27 @@ function FriendProfile({
           </View>
 
           <View style={styles.friendActions}>
-            <TouchableOpacity style={[styles.messageActionBtn, { flex: 1 }]}>
-              <Text style={styles.messageActionBtnText}>Message</Text>
+            <TouchableOpacity
+              style={[
+                styles.messageActionBtn,
+                { flex: 1, opacity: followLoading ? 0.6 : 1 },
+                following && styles.followingBtn,
+              ]}
+              onPress={handleFollowToggle}
+              disabled={followLoading}
+            >
+              <Text style={[styles.messageActionBtnText, following && styles.followingBtnText]}>
+                {followLoading ? "..." : following ? "Following" : "Follow"}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.messageActionBtn, { flex: 1, opacity: messagingLoading ? 0.6 : 1 }]}
+              onPress={handleMessage}
+              disabled={messagingLoading}
+            >
+              <Text style={styles.messageActionBtnText}>
+                {messagingLoading ? "Opening..." : "Message"}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={handleReportUser} style={styles.reportActionBtn}>
               <Text style={styles.reportActionBtnText}>Report</Text>
@@ -411,7 +496,7 @@ const styles = StyleSheet.create({
   avatarInitial: { fontSize: 28, color: "#6B7280" },
   statsRow: { flex: 1, flexDirection: "row", justifyContent: "space-around" },
   statItem: { alignItems: "center" },
-  statNumber: { fontSize: 18, color: "#111827", lineHeight: 22 },
+  statNumber: { fontSize: 18, color: "#0064B1", lineHeight: 22, fontWeight: "700" },
   statLabel: { fontSize: 11, color: "#6B7280" },
   bioBlock: { marginTop: 12, gap: 3 },
   bioName: { fontSize: 14, color: "#111827" },
@@ -422,14 +507,14 @@ const styles = StyleSheet.create({
   reviewCountText: { fontSize: 11, color: "#9CA3AF" },
   editProfileBtn: {
     marginTop: 12,
-    paddingVertical: 6,
+    paddingVertical: 8,
     backgroundColor: "#F9FAFB",
     borderWidth: 1,
     borderColor: "#E5E7EB",
     borderRadius: 10,
     alignItems: "center",
   },
-  editProfileText: { fontSize: 14, color: "#111827" },
+  editProfileText: { fontSize: 14, color: "#0064B1", fontWeight: "500" },
   listingsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 1, backgroundColor: "#F3F4F6" },
   gridCell: { width: GRID_CELL, height: GRID_CELL, backgroundColor: "#FFFFFF", position: "relative" },
   gridImage: { width: GRID_CELL, height: GRID_CELL },
@@ -465,14 +550,16 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   messageActionBtn: {
-    paddingVertical: 6,
-    backgroundColor: "#F9FAFB",
+    paddingVertical: 8,
+    backgroundColor: "#0064B1",
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: "#0064B1",
     borderRadius: 10,
     alignItems: "center",
   },
-  messageActionBtnText: { fontSize: 14, color: "#111827" },
+  messageActionBtnText: { fontSize: 14, color: "#FFFFFF", fontWeight: "600" },
+  followingBtn: { backgroundColor: "#EFF6FF", borderColor: "#BFDBFE" },
+  followingBtnText: { color: "#0064B1" },
   reportActionBtn: {
     paddingVertical: 6,
     paddingHorizontal: 14,
