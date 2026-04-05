@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { Settings, ArrowLeft, Shield } from "lucide-react-native";
+import { Settings, ArrowLeft, Shield, LayoutGrid, Star } from "lucide-react-native";
 import { currentUser as mockUser, type UserProfile, type ListingItem } from "../data/mockData";
 import { StarRating } from "./StarRating";
 import { ReviewsViewer } from "./ReviewsViewer";
@@ -26,6 +26,7 @@ import { isCurrentUserAdmin } from "../lib/moderation";
 import { AdminModerationPanel } from "./AdminModerationPanel";
 import { supabase } from "../lib/supabase";
 import { findOrCreateDirectConversation } from "../lib/messages";
+import { getSavedListings } from "../lib/saved";
 
 const { width } = Dimensions.get("window");
 const GRID_CELL = (width - 2) / 3;
@@ -50,6 +51,26 @@ export function ProfilePage() {
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [profileTab, setProfileTab] = useState<"listings" | "starred">("listings");
+  const [starredListings, setStarredListings] = useState<ListingItem[]>([]);
+  const [loadingStarred, setLoadingStarred] = useState(false);
+
+  const loadStarred = useCallback(async () => {
+    if (!user) return;
+    setLoadingStarred(true);
+    try {
+      const items = await getSavedListings(user.id);
+      setStarredListings(items.sort((a, b) => a.title.localeCompare(b.title)));
+    } catch {
+      // keep empty
+    } finally {
+      setLoadingStarred(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (profileTab === "starred") loadStarred();
+  }, [profileTab, loadStarred]);
 
   const loadProfile = useCallback(async () => {
     if (!user) return;
@@ -247,31 +268,79 @@ export function ProfilePage() {
             </TouchableOpacity>
           </View>
 
+          {/* Profile Tab Bar */}
+          <View style={styles.profileTabBar}>
+            <TouchableOpacity
+              onPress={() => setProfileTab("listings")}
+              style={[styles.profileTabBtn, profileTab === "listings" && styles.profileTabBtnActive]}
+            >
+              <LayoutGrid size={20} color={profileTab === "listings" ? "#0064B1" : "#9CA3AF"} strokeWidth={1.5} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setProfileTab("starred")}
+              style={[styles.profileTabBtn, profileTab === "starred" && styles.profileTabBtnActive]}
+            >
+              <Star size={20} color={profileTab === "starred" ? "#0064B1" : "#9CA3AF"} strokeWidth={1.5} />
+            </TouchableOpacity>
+          </View>
+
           {/* Listings Grid */}
-          <View style={[styles.listingsGrid, { borderTopWidth: 1, borderTopColor: "#F3F4F6" }]}>
-            {listings.length === 0 ? (
+          {profileTab === "listings" && (
+            <View style={styles.listingsGrid}>
+              {listings.length === 0 ? (
+                <View style={styles.emptyListings}>
+                  <Text style={styles.emptyListingsText}>No listings yet</Text>
+                  <Text style={styles.emptyListingsSubtext}>
+                    Tap + on the home screen to post your first item
+                  </Text>
+                </View>
+              ) : (
+                listings.map((item) => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={styles.gridCell}
+                    onLongPress={() => handleListingLongPress(item)}
+                    activeOpacity={0.85}
+                  >
+                    <Image source={{ uri: item.image }} style={styles.gridImage} resizeMode="cover" />
+                    <View style={styles.gridPriceBadge}>
+                      <Text style={styles.gridPriceText}>${item.price}</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))
+              )}
+            </View>
+          )}
+
+          {/* Starred Grid */}
+          {profileTab === "starred" && (
+            loadingStarred ? (
               <View style={styles.emptyListings}>
-                <Text style={styles.emptyListingsText}>No listings yet</Text>
-                <Text style={styles.emptyListingsSubtext}>
-                  Tap + on the home screen to post your first item
-                </Text>
+                <ActivityIndicator color="#0064B1" />
               </View>
             ) : (
-              listings.map((item) => (
-                <TouchableOpacity
-                  key={item.id}
-                  style={styles.gridCell}
-                  onLongPress={() => handleListingLongPress(item)}
-                  activeOpacity={0.85}
-                >
-                  <Image source={{ uri: item.image }} style={styles.gridImage} resizeMode="cover" />
-                  <View style={styles.gridPriceBadge}>
-                    <Text style={styles.gridPriceText}>${item.price}</Text>
+              <View style={styles.listingsGrid}>
+                {starredListings.length === 0 ? (
+                  <View style={styles.emptyListings}>
+                    <Star size={28} color="#D1D5DB" strokeWidth={1.5} />
+                    <Text style={styles.emptyListingsText}>No saved items yet</Text>
+                    <Text style={styles.emptyListingsSubtext}>
+                      Tap the heart on a listing to save it for later
+                    </Text>
                   </View>
-                </TouchableOpacity>
-              ))
-            )}
-          </View>
+                ) : (
+                  starredListings.map((item) => (
+                    <View key={item.id} style={styles.gridCell}>
+                      <Image source={{ uri: item.image }} style={styles.gridImage} resizeMode="cover" />
+                      <View style={styles.gridPriceBadge}>
+                        <Text style={styles.gridPriceText}>${item.price}</Text>
+                      </View>
+                    </View>
+                  ))
+                )}
+              </View>
+            )
+          )}
         </ScrollView>
       )}
 
@@ -515,6 +584,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   editProfileText: { fontSize: 14, color: "#0064B1", fontWeight: "500" },
+  profileTabBar: {
+    flexDirection: "row",
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  profileTabBtn: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 10,
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
+  },
+  profileTabBtnActive: { borderBottomColor: "#0064B1" },
   listingsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 1, backgroundColor: "#F3F4F6" },
   gridCell: { width: GRID_CELL, height: GRID_CELL, backgroundColor: "#FFFFFF", position: "relative" },
   gridImage: { width: GRID_CELL, height: GRID_CELL },

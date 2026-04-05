@@ -15,7 +15,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams } from "expo-router";
-import { ArrowLeft, Send, Camera, Bell } from "lucide-react-native";
+import { ArrowLeft, Send, Camera, Bell, SquarePen, Search, X } from "lucide-react-native";
 import { type Notification } from "../data/mockData";
 import { useAuth } from "../lib/auth-context";
 import {
@@ -24,10 +24,12 @@ import {
   sendMessage,
   subscribeToMessages,
   markConversationRead,
+  findOrCreateDirectConversation,
   type DBConversation,
   type DBMessage,
 } from "../lib/messages";
 import { getNotifications, markNotificationAsRead } from "../lib/notifications";
+import { searchUsers } from "../lib/profile";
 
 const { width } = Dimensions.get("window");
 
@@ -41,9 +43,67 @@ export function MessagesPage() {
   const [conversations, setConversations] = useState<DBConversation[]>([]);
   const [loadingConvos, setLoadingConvos] = useState(false);
   const [notificationsList, setNotificationsList] = useState<Notification[]>([]);
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<{ id: string; name: string; avatar: string }[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const insets = useSafeAreaInsets();
 
   const unreadCount = notificationsList.filter((n) => !n.read).length;
+
+  const handleSearch = useCallback((query: string) => {
+    setSearchQuery(query);
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    if (!query.trim()) {
+      setSearchResults([]);
+      setSearchLoading(false);
+      return;
+    }
+    setSearchLoading(true);
+    searchTimeout.current = setTimeout(async () => {
+      if (!user) return;
+      try {
+        const results = await searchUsers(query, user.id);
+        setSearchResults(results);
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 300);
+  }, [user]);
+
+  const handleSelectUser = async (selectedUser: { id: string; name: string; avatar: string }) => {
+    if (!user) return;
+    try {
+      const conversationId = await findOrCreateDirectConversation(user.id, selectedUser.id);
+      setShowSearch(false);
+      setSearchQuery("");
+      setSearchResults([]);
+      const convos = await loadConversations();
+      const convo = convos.find((c: DBConversation) => c.id === conversationId);
+      if (convo) {
+        setActiveConvo(convo);
+      } else {
+        // Conversation just created — build a minimal one to open ChatView
+        setActiveConvo({
+          id: conversationId,
+          contactName: selectedUser.name,
+          contactAvatar: selectedUser.avatar,
+          contactId: selectedUser.id,
+          lastMessage: "",
+          lastMessageTime: "",
+          unread: 0,
+          itemTitle: "",
+          itemImage: "",
+          listingId: "",
+        });
+      }
+    } catch {
+      // Silently fail — user can retry
+    }
+  };
 
   const loadConversations = useCallback(async () => {
     if (!user) return [];
@@ -107,6 +167,14 @@ export function MessagesPage() {
         <Text style={styles.listTitle}>
           {activeTab === "messages" ? "Messages" : "Notifications"}
         </Text>
+        {activeTab === "messages" && (
+          <TouchableOpacity
+            onPress={() => setShowSearch(true)}
+            style={styles.composeBtn}
+          >
+            <SquarePen size={20} color="#0064B1" strokeWidth={1.5} />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Tab Bar */}
@@ -134,8 +202,74 @@ export function MessagesPage() {
         </TouchableOpacity>
       </View>
 
+      {/* User Search Overlay */}
+      {showSearch && (
+        <View style={styles.searchOverlay}>
+          <View style={styles.searchHeader}>
+            <TouchableOpacity
+              onPress={() => { setShowSearch(false); setSearchQuery(""); setSearchResults([]); }}
+              style={styles.searchBackBtn}
+            >
+              <ArrowLeft size={22} color="#111827" strokeWidth={1.5} />
+            </TouchableOpacity>
+            <View style={styles.searchInputWrapper}>
+              <Search size={16} color="#9CA3AF" strokeWidth={1.5} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search UTA students..."
+                placeholderTextColor="#9CA3AF"
+                value={searchQuery}
+                onChangeText={handleSearch}
+                autoFocus
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => handleSearch("")}>
+                  <X size={16} color="#9CA3AF" strokeWidth={1.5} />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+          {searchLoading ? (
+            <View style={styles.centered}>
+              <ActivityIndicator color="#0064B1" />
+            </View>
+          ) : (
+            <FlatList
+              data={searchResults}
+              keyExtractor={(item) => item.id}
+              showsVerticalScrollIndicator={false}
+              ListEmptyComponent={
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptySubtext}>
+                    {searchQuery.trim() ? "No users found" : "Search for UTA students by name"}
+                  </Text>
+                </View>
+              }
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  onPress={() => handleSelectUser(item)}
+                  style={styles.searchResultRow}
+                  activeOpacity={0.7}
+                >
+                  {item.avatar ? (
+                    <Image source={{ uri: item.avatar }} style={styles.searchResultAvatar} />
+                  ) : (
+                    <View style={[styles.searchResultAvatar, styles.avatarPlaceholder]}>
+                      <Text style={styles.avatarInitial}>
+                        {item.name.charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
+                  <Text style={styles.searchResultName}>{item.name}</Text>
+                </TouchableOpacity>
+              )}
+            />
+          )}
+        </View>
+      )}
+
       {/* Messages Tab */}
-      {activeTab === "messages" && (
+      {activeTab === "messages" && !showSearch && (
         <>
           {loadingConvos ? (
             <View style={styles.centered}>
@@ -150,7 +284,7 @@ export function MessagesPage() {
                 <View style={styles.emptyState}>
                   <Text style={styles.emptyText}>No messages yet</Text>
                   <Text style={styles.emptySubtext}>
-                    Tap "Message Seller" on a listing to start a conversation
+                    Tap the compose button or "Message Seller" on a listing to start a conversation
                   </Text>
                 </View>
               }
@@ -214,7 +348,7 @@ export function MessagesPage() {
       )}
 
       {/* Notifications Tab */}
-      {activeTab === "notifications" && (
+      {activeTab === "notifications" && !showSearch && (
         <ScrollView showsVerticalScrollIndicator={false}>
           <View style={styles.notifListContainer}>
             {notificationsList.map((notification) => (
@@ -441,8 +575,9 @@ function ChatView({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#FFFFFF" },
   centered: { flex: 1, justifyContent: "center", alignItems: "center" },
-  listHeader: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#F3F4F6" },
+  listHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#F3F4F6" },
   listTitle: { fontSize: 18, color: "#111827" },
+  composeBtn: { padding: 6 },
   tabBar: { flexDirection: "row", width: width, borderBottomWidth: 1, borderBottomColor: "#F3F4F6", backgroundColor: "#FFFFFF" },
   tabBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: "transparent", gap: 6 },
   tabBtnActive: { borderBottomColor: "#0064B1" },
@@ -485,6 +620,15 @@ const styles = StyleSheet.create({
   unreadIndicator: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#0064B1", flexShrink: 0 },
   emptyNotif: { height: 192, justifyContent: "center", alignItems: "center", gap: 8 },
   emptyNotifText: { fontSize: 14, color: "#9CA3AF" },
+  // Search
+  searchOverlay: { flex: 1, backgroundColor: "#FFFFFF" },
+  searchHeader: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#F3F4F6" },
+  searchBackBtn: { padding: 4, marginLeft: -4 },
+  searchInputWrapper: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#F3F4F6", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 8 },
+  searchInput: { flex: 1, fontSize: 14, color: "#111827", padding: 0 },
+  searchResultRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 12 },
+  searchResultAvatar: { width: 44, height: 44, borderRadius: 22 },
+  searchResultName: { fontSize: 14, color: "#111827" },
   // Chat
   chatContainer: { flex: 1, backgroundColor: "#FFFFFF" },
   chatHeader: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: "#F3F4F6" },

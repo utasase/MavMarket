@@ -69,6 +69,45 @@ export async function getListings(): Promise<ListingItem[]> {
   }));
 }
 
+export async function getListingsByIds(ids: string[]): Promise<ListingItem[]> {
+  if (ids.length === 0) return [];
+  const { data, error } = await supabase
+    .from("listings")
+    .select(`
+      id, title, price, image_url, category, condition, description,
+      created_at, status, seller_id, pickup_location_name,
+      pickup_location_address, is_on_campus,
+      seller:users(name, avatar_url, rating)
+    `)
+    .in("id", ids)
+    .eq("status", "active");
+
+  if (error || !data) return [];
+
+  return data.map((row: any) => ({
+    id: row.id,
+    title: row.title,
+    price: row.price,
+    image: row.image_url ?? "",
+    category: row.category,
+    condition: row.condition,
+    description: row.description ?? "",
+    postedAt: formatRelativeTime(row.created_at),
+    sellerId: row.seller_id,
+    sellerName: row.seller?.name ?? "Unknown",
+    sellerAvatar: row.seller?.avatar_url ?? "",
+    sellerRating: row.seller?.rating ?? 0,
+    isSold: false,
+    pickupLocation: {
+      name: row.pickup_location_name ?? "On Campus",
+      address: row.pickup_location_address ?? "UTA Campus, Arlington TX",
+      lat: UTA_LAT,
+      lng: UTA_LNG,
+      isOnCampus: row.is_on_campus ?? true,
+    },
+  }));
+}
+
 export async function createListing(input: CreateListingInput): Promise<string> {
   const { data, error } = await supabase
     .from("listings")

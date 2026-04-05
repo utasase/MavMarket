@@ -135,6 +135,22 @@ export async function updateNotificationPreferences(
   if (error) throw error;
 }
 
+export async function searchUsers(
+  query: string,
+  currentUserId: string
+): Promise<{ id: string; name: string; avatar: string }[]> {
+  if (!query.trim()) return [];
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, name, avatar_url")
+    .neq("id", currentUserId)
+    .ilike("name", `%${query.trim()}%`)
+    .limit(20);
+
+  if (error || !data) return [];
+  return data.map((u: any) => ({ id: u.id, name: u.name ?? "", avatar: u.avatar_url ?? "" }));
+}
+
 function formatRelativeTime(isoString: string): string {
   const diffMs = Date.now() - new Date(isoString).getTime();
   const hours = Math.floor(diffMs / 3_600_000);

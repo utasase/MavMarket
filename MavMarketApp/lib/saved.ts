@@ -1,4 +1,6 @@
 import { supabase } from "./supabase";
+import { getListingsByIds } from "./listings";
+import { type ListingItem } from "../data/mockData";
 
 export async function getSavedListingIds(userId: string): Promise<string[]> {
   const { data, error } = await supabase
@@ -24,4 +26,9 @@ export async function unsaveItem(userId: string, listingId: string): Promise<voi
     .eq("user_id", userId)
     .eq("listing_id", listingId);
   if (error) throw error;
+}
+
+export async function getSavedListings(userId: string): Promise<ListingItem[]> {
+  const ids = await getSavedListingIds(userId);
+  return getListingsByIds(ids);
 }

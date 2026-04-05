@@ -21,9 +21,27 @@ npm run start        # or: npx expo start
 npm run android
 npm run ios
 npm run web
+
+# Tests (Jest + jest-expo)
+npm test                          # run all tests
+npm run test:watch                # watch mode
+npm run test:coverage             # with coverage report
+npx jest __tests__/lib/listings.test.ts   # single test file
 ```
 
-No linting or test runner is configured.
+Tests live in `MavMarketApp/__tests__/lib/` and cover the `lib/` data layer. A shared Supabase mock is in `__tests__/helpers/supabaseMock.ts`. Coverage thresholds: 85% statements, 80% branches, 90% functions.
+
+### ops-admin (Next.js admin console)
+
+```bash
+cd ops-admin
+npm install
+npm run dev          # Next.js dev server
+npm run build        # production build
+npm run lint         # ESLint
+```
+
+Stack: Next.js 16 + React 19 + Supabase SSR + shadcn/ui + Tailwind CSS 4. This is the internal admin/moderation dashboard — separate from the mobile app.
 
 ## Environment Setup
 
@@ -50,8 +68,8 @@ npx supabase db reset   # requires supabase CLI and local Docker
 
 Expo Router files in `app/` are thin wrappers — each just renders a single component:
 - `app/_layout.tsx` — root layout; wraps everything in `AuthProvider` and gates behind `SplashScreen` → `LoginPage` → `<Slot />`
-- `app/(tabs)/_layout.tsx` — 4-tab bar (Home, Discover, Messages, Profile)
-- `app/(tabs)/index.tsx` → `<HomePage />`, `messages.tsx` → `<MessagesPage />`, etc.
+- `app/(tabs)/_layout.tsx` — 5-tab bar (Home, Discover, Create, Messages, Profile)
+- `app/(tabs)/index.tsx` → `<HomePage />`, `swipe.tsx` → `<SwipePage />`, `create.tsx` → `<CreateListingModal />`, `messages.tsx` → `<MessagesPage />`, `profile.tsx` → `<ProfilePage />`
 
 All actual UI logic lives in `components/`.
 
@@ -60,14 +78,16 @@ All actual UI logic lives in `components/`.
 ```
 SplashScreen (always shown first)
   └─ LoginPage (if no Supabase session)
+  └─ EmailConfirmedScreen (transient, shown for 2.5s after email confirmation)
   └─ Tab Navigator (if session exists)
         ├─ HomePage
         ├─ SwipePage
+        ├─ CreateListingModal
         ├─ MessagesPage
         └─ ProfilePage
 ```
 
-`AuthProvider` (`lib/auth-context.tsx`) wraps the whole app and exposes `useAuth()` → `{ session, user, loading }`. Auth state changes (login/logout) automatically cause `AppGate` in `_layout.tsx` to re-render and show/hide `LoginPage`.
+`AuthProvider` (`lib/auth-context.tsx`) wraps the whole app and exposes `useAuth()` → `{ session, user, loading, confirmed, clearConfirmed }`. Auth state changes (login/logout) automatically cause `AppGate` in `_layout.tsx` to re-render and show/hide `LoginPage`. After email confirmation, a brief welcome screen is shown before entering the app.
 
 Email validation enforces `@mavs.uta.edu` or `@uta.edu` on signup — **client-side only in `LoginPage.tsx`; this restriction is NOT enforced at the DB or RLS level yet.**
 
@@ -125,27 +145,18 @@ Two `supabase/` directories exist:
 | `20240005_message_reads_and_prefs.sql` | `message_reads` table + `users.notification_preferences` |
 | `20240006_listing_status.sql` | Replaces `is_sold boolean` with `status listing_status enum`; drops `is_sold` |
 | `20240007_moderation_infra.sql` | `is_admin` on users, `moderation_actions`, `audit_events`, admin RLS policies |
-
-**Still deferred:**
-- `rate_limit_log` / `is_rate_limited()` — abuse controls for message/report spam; see `agents/runbooks/release-checklist.md`
+| `20240008_email_enforcement.sql` | DB-level email domain enforcement |
+| `20240009_rate_limiting.sql` | `rate_limit_log` / `is_rate_limited()` — abuse controls |
+| `20240010_storage_rls.sql` | Storage bucket RLS policies |
+| `20240011_follows.sql` | User follow/follower system |
 
 ### Agent Coordination System
 
-`MavMarketApp/agents/` defines a multi-agent build orchestration system:
+`.claude/agents/uni-marketplace-architect.md` defines a specialized Claude Code agent for this project. It can be invoked from Claude Code to handle marketplace architecture, feature implementation, and bug fixes.
 
-- `plan.md` — **master orchestration plan**; canonical reference for stack decisions, delivery phases, and agent prompts
-- `manifest.json` — agent registry: 10 agents, phases, dependencies, handoff targets
-- `contracts.md` — **read before touching shared interfaces** — hard boundaries for auth model, data shapes, RLS invariants, messaging, moderation statuses
-- `orchestrator.md` — sequencing rules, conflict resolution, release gates
-- `handoffs/phase-1-progress.md` — **current phase 1 status** (~70% complete as of 2026-03-30); lists what's done, what's missing, and pending migration SQL
-- `runbooks/` — phase-scoped execution plans
-- `specs/` — per-agent acceptance criteria
+### EAS Build
 
-Agent execution order (all phase 1 unless noted): `orchestrator-agent` → `backend-schema-agent` → `security-agent` → `mobile-foundation-agent` → `auth-agent` → `marketplace-agent` → `messaging-agent` → `profile-trust-agent` → `moderation-admin-agent` → `platform-release-agent` → `payment-architecture-agent` (phase 2, architecture-only).
-
-`plan.md` also calls for an `ops-admin-web-agent` (Next.js internal admin console) that does not yet exist in `manifest.json` — add it before that work starts.
-
-When implementing any feature that touches auth, listings, messaging, or moderation, check `agents/contracts.md` first.
+`MavMarketApp/eas.json` defines three build profiles: `development` (dev client, internal distribution), `preview` (internal distribution), and `production` (auto-incrementing versions). Requires EAS CLI (`npx eas build`).
 
 ### Key Patterns
 
