@@ -12,6 +12,7 @@ import {
 import { X } from "lucide-react-native";
 import { StarRating } from "./StarRating";
 import { type Review } from "../lib/reviews";
+import { useTheme } from "../lib/ThemeContext";
 
 function formatRelativeDate(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -38,6 +39,9 @@ export function ReviewsViewer({
   overallRating,
   reviews,
 }: ReviewsViewerProps) {
+  const { theme } = useTheme();
+  const c = theme.colors;
+
   return (
     <Modal
       visible={isOpen}
@@ -45,20 +49,20 @@ export function ReviewsViewer({
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: c.background }]}>
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { borderBottomColor: c.borderLight }]}>
           <View>
-            <Text style={styles.title}>Reviews</Text>
+            <Text style={[styles.title, { color: c.textPrimary }]}>Reviews</Text>
             <View style={styles.ratingRow}>
               <StarRating rating={overallRating} size={12} />
-              <Text style={styles.ratingText}>
+              <Text style={[styles.ratingText, { color: c.textSecondary }]}>
                 {overallRating.toFixed(1)} · {reviews.length} reviews
               </Text>
             </View>
           </View>
           <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-            <X size={22} color="#111827" strokeWidth={1.5} />
+            <X size={22} color={c.textPrimary} strokeWidth={1.5} />
           </TouchableOpacity>
         </View>
 
@@ -66,11 +70,11 @@ export function ReviewsViewer({
         <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
           {reviews.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>No reviews yet</Text>
+              <Text style={[styles.emptyText, { color: c.textTertiary }]}>No reviews yet</Text>
             </View>
           ) : (
             reviews.map((review) => (
-              <View key={review.id} style={styles.reviewItem}>
+              <View key={review.id} style={[styles.reviewItem, { borderBottomColor: c.borderLight }]}>
                 <View style={styles.reviewRow}>
                   <Image
                     source={{
@@ -82,10 +86,10 @@ export function ReviewsViewer({
                   />
                   <View style={styles.reviewContent}>
                     <View style={styles.reviewMeta}>
-                      <Text style={styles.reviewerName}>
+                      <Text style={[styles.reviewerName, { color: c.textPrimary }]}>
                         {review.reviewer?.name ?? "Anonymous"}
                       </Text>
-                      <Text style={styles.reviewDate}>
+                      <Text style={[styles.reviewDate, { color: c.textTertiary }]}>
                         {formatRelativeDate(review.created_at)}
                       </Text>
                     </View>
@@ -93,7 +97,7 @@ export function ReviewsViewer({
                       <StarRating rating={review.rating} size={11} showValue={false} />
                     </View>
                     {review.comment ? (
-                      <Text style={styles.reviewComment}>{review.comment}</Text>
+                      <Text style={[styles.reviewComment, { color: c.textSecondary }]}>{review.comment}</Text>
                     ) : null}
                   </View>
                 </View>
@@ -109,7 +113,6 @@ export function ReviewsViewer({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
   },
   header: {
     flexDirection: "row",
@@ -118,11 +121,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
   },
   title: {
     fontSize: 18,
-    color: "#111827",
   },
   ratingRow: {
     flexDirection: "row",
@@ -132,7 +133,6 @@ const styles = StyleSheet.create({
   },
   ratingText: {
     fontSize: 14,
-    color: "#6B7280",
   },
   closeBtn: {
     padding: 8,
@@ -149,12 +149,10 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
-    color: "#9CA3AF",
   },
   reviewItem: {
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
   },
   reviewRow: {
     flexDirection: "row",
@@ -176,19 +174,16 @@ const styles = StyleSheet.create({
   },
   reviewerName: {
     fontSize: 14,
-    color: "#111827",
     fontWeight: "500",
   },
   reviewDate: {
     fontSize: 12,
-    color: "#9CA3AF",
   },
   reviewStars: {
     marginTop: 4,
   },
   reviewComment: {
     fontSize: 14,
-    color: "#4B5563",
     marginTop: 8,
     lineHeight: 20,
   },

@@ -24,6 +24,7 @@ import { useAuth } from "../lib/auth-context";
 import { createConversation } from "../lib/messages";
 import { getReviews, createReview, hasReviewed, type Review } from "../lib/reviews";
 import { createReport, REPORT_REASONS } from "../lib/reports";
+import { useTheme } from "../lib/ThemeContext";
 
 const { width } = Dimensions.get("window");
 
@@ -35,6 +36,8 @@ interface ItemDetailProps {
 }
 
 export function ItemDetail({ item, onBack, isSaved, onToggleSave }: ItemDetailProps) {
+  const { theme } = useTheme();
+  const c = theme.colors;
   const [showReviews, setShowReviews] = useState(false);
   const [messagingLoading, setMessagingLoading] = useState(false);
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -122,7 +125,7 @@ export function ItemDetail({ item, onBack, isSaved, onToggleSave }: ItemDetailPr
       : item.sellerRating;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: c.background }]}>
       <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
         {/* Image */}
         <View style={styles.imageContainer}>
@@ -133,18 +136,18 @@ export function ItemDetail({ item, onBack, isSaved, onToggleSave }: ItemDetailPr
           />
           <TouchableOpacity
             onPress={onBack}
-            style={[styles.backBtn, { top: insets.top + 8 }]}
+            style={[styles.backBtn, { top: insets.top + 8, backgroundColor: c.overlay }]}
           >
             <ChevronLeft size={20} color="#FFFFFF" />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={onToggleSave}
-            style={[styles.heartBtn, { top: insets.top + 8 }]}
+            style={[styles.heartBtn, { top: insets.top + 8, backgroundColor: c.overlay }]}
           >
             <Heart
               size={20}
-              color={isSaved ? "#EF4444" : "#FFFFFF"}
-              fill={isSaved ? "#EF4444" : "transparent"}
+              color={isSaved ? c.error : "#FFFFFF"}
+              fill={isSaved ? c.error : "transparent"}
               strokeWidth={1.5}
             />
           </TouchableOpacity>
@@ -155,20 +158,20 @@ export function ItemDetail({ item, onBack, isSaved, onToggleSave }: ItemDetailPr
           {/* Title & Price */}
           <View>
             <View style={styles.titleRow}>
-              <Text style={styles.title}>{item.title}</Text>
-              <Text style={styles.price}>${item.price}</Text>
+              <Text style={[styles.title, { color: c.textPrimary }]}>{item.title}</Text>
+              <Text style={[styles.price, { color: c.textPrimary }]}>${item.price}</Text>
             </View>
             <View style={styles.metaRow}>
-              <View style={styles.conditionBadge}>
-                <Text style={styles.conditionText}>{item.condition}</Text>
+              <View style={[styles.conditionBadge, { backgroundColor: c.surface }]}>
+                <Text style={[styles.conditionText, { color: c.textTertiary }]}>{item.condition}</Text>
               </View>
-              <Text style={styles.postedAt}>{item.postedAt}</Text>
+              <Text style={[styles.postedAt, { color: c.textTertiary }]}>{item.postedAt}</Text>
             </View>
           </View>
 
           {/* Seller */}
           <TouchableOpacity
-            style={styles.sellerRow}
+            style={[styles.sellerRow, { borderColor: c.borderLight }]}
             onPress={() => {
               if (!isOwnListing && item.sellerId) {
                 router.push(`/(tabs)/profile?userId=${item.sellerId}` as any);
@@ -178,7 +181,7 @@ export function ItemDetail({ item, onBack, isSaved, onToggleSave }: ItemDetailPr
           >
             <Image source={{ uri: item.sellerAvatar }} style={styles.sellerAvatar} />
             <View style={styles.sellerInfo}>
-              <Text style={styles.sellerName}>{item.sellerName}</Text>
+              <Text style={[styles.sellerName, { color: c.textPrimary }]}>{item.sellerName}</Text>
               <TouchableOpacity onPress={() => setShowReviews(true)}>
                 <StarRating rating={sellerRating} size={11} />
               </TouchableOpacity>
@@ -186,18 +189,18 @@ export function ItemDetail({ item, onBack, isSaved, onToggleSave }: ItemDetailPr
             {canMessage && !alreadyReviewed && (
               <TouchableOpacity
                 onPress={() => setShowLeaveReview(true)}
-                style={styles.reviewCta}
+                style={[styles.reviewCta, { borderColor: c.border }]}
               >
-                <Text style={styles.reviewCtaText}>Leave review</Text>
+                <Text style={[styles.reviewCtaText, { color: c.textSecondary }]}>Leave review</Text>
               </TouchableOpacity>
             )}
             {canMessage && alreadyReviewed && (
-              <Text style={styles.reviewedBadge}>Reviewed</Text>
+              <Text style={[styles.reviewedBadge, { color: c.textTertiary }]}>Reviewed</Text>
             )}
           </TouchableOpacity>
 
           {/* Description */}
-          <Text style={styles.description}>{item.description}</Text>
+          <Text style={[styles.description, { color: c.textSecondary }]}>{item.description}</Text>
 
           {/* Pickup Location */}
           <PickupMap location={item.pickupLocation} />
@@ -205,8 +208,8 @@ export function ItemDetail({ item, onBack, isSaved, onToggleSave }: ItemDetailPr
           {/* Report link */}
           {!isOwnListing && (
             <TouchableOpacity onPress={handleReport} style={styles.reportRow}>
-              <Flag size={13} color="#9CA3AF" strokeWidth={1.5} />
-              <Text style={styles.reportText}>Report this listing</Text>
+              <Flag size={13} color={c.textTertiary} strokeWidth={1.5} />
+              <Text style={[styles.reportText, { color: c.textTertiary }]}>Report this listing</Text>
             </TouchableOpacity>
           )}
 
@@ -216,18 +219,18 @@ export function ItemDetail({ item, onBack, isSaved, onToggleSave }: ItemDetailPr
       </ScrollView>
 
       {/* Sticky action buttons */}
-      <View style={[styles.actions, { paddingBottom: insets.bottom + 8 }]}>
+      <View style={[styles.actions, { paddingBottom: insets.bottom + 8, backgroundColor: c.background, borderTopColor: c.borderLight }]}>
         <TouchableOpacity
           onPress={handleMessageSeller}
           disabled={messagingLoading || !canMessage}
-          style={[styles.messageBtnContainer, (!canMessage || messagingLoading) && styles.messageBtnDisabled]}
+          style={[styles.messageBtnContainer, { backgroundColor: c.textPrimary }, (!canMessage || messagingLoading) && { backgroundColor: c.textSecondary }]}
         >
-          <Text style={styles.messageBtnText}>
+          <Text style={[styles.messageBtnText, { color: c.background }]}>
             {isOwnListing ? "Your Listing" : messagingLoading ? "Opening..." : "Message Seller"}
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={onToggleSave} style={styles.saveBtn}>
-          <Text style={styles.saveBtnText}>{isSaved ? "Saved" : "Save"}</Text>
+        <TouchableOpacity onPress={onToggleSave} style={[styles.saveBtn, { borderColor: c.border }]}>
+          <Text style={[styles.saveBtnText, { color: c.textSecondary }]}>{isSaved ? "Saved" : "Save"}</Text>
         </TouchableOpacity>
       </View>
 
@@ -247,14 +250,14 @@ export function ItemDetail({ item, onBack, isSaved, onToggleSave }: ItemDetailPr
         presentationStyle="pageSheet"
         onRequestClose={() => setShowLeaveReview(false)}
       >
-        <SafeAreaView style={styles.reviewModal}>
-          <View style={styles.reviewModalHeader}>
-            <Text style={styles.reviewModalTitle}>Review {item.sellerName}</Text>
+        <SafeAreaView style={[styles.reviewModal, { backgroundColor: c.background }]}>
+          <View style={[styles.reviewModalHeader, { borderBottomColor: c.borderLight }]}>
+            <Text style={[styles.reviewModalTitle, { color: c.textPrimary }]}>Review {item.sellerName}</Text>
             <TouchableOpacity
               onPress={() => setShowLeaveReview(false)}
               style={styles.reviewModalClose}
             >
-              <Text style={styles.reviewModalCancelText}>Cancel</Text>
+              <Text style={[styles.reviewModalCancelText, { color: c.textSecondary }]}>Cancel</Text>
             </TouchableOpacity>
           </View>
 
@@ -269,17 +272,17 @@ export function ItemDetail({ item, onBack, isSaved, onToggleSave }: ItemDetailPr
                 >
                   <Star
                     size={36}
-                    color={reviewRating >= star ? "#FACC15" : "#E5E7EB"}
-                    fill={reviewRating >= star ? "#FACC15" : "#E5E7EB"}
+                    color={reviewRating >= star ? c.star : c.border}
+                    fill={reviewRating >= star ? c.star : c.border}
                   />
                 </TouchableOpacity>
               ))}
             </View>
 
             <TextInput
-              style={styles.reviewInput}
+              style={[styles.reviewInput, { borderColor: c.border, color: c.textPrimary, backgroundColor: c.background }]}
               placeholder="Share your experience (optional)"
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={c.textTertiary}
               value={reviewComment}
               onChangeText={setReviewComment}
               multiline
@@ -290,12 +293,12 @@ export function ItemDetail({ item, onBack, isSaved, onToggleSave }: ItemDetailPr
             <TouchableOpacity
               onPress={handleSubmitReview}
               disabled={reviewSubmitting}
-              style={[styles.submitReviewBtn, reviewSubmitting && styles.submitReviewBtnDisabled]}
+              style={[styles.submitReviewBtn, { backgroundColor: c.textPrimary }, reviewSubmitting && { backgroundColor: c.textSecondary }]}
             >
               {reviewSubmitting ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
+                <ActivityIndicator color={c.background} size="small" />
               ) : (
-                <Text style={styles.submitReviewBtnText}>Submit Review</Text>
+                <Text style={[styles.submitReviewBtnText, { color: c.background }]}>Submit Review</Text>
               )}
             </TouchableOpacity>
           </View>

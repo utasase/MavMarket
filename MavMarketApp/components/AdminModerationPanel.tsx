@@ -17,6 +17,7 @@ import {
   type Report,
   type ModerationAction,
 } from "../lib/moderation";
+import { useTheme } from "../lib/ThemeContext";
 
 interface Props {
   onBack: () => void;
@@ -24,6 +25,8 @@ interface Props {
 
 export function AdminModerationPanel({ onBack }: Props) {
   const insets = useSafeAreaInsets();
+  const { theme } = useTheme();
+  const c = theme.colors;
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -58,27 +61,27 @@ export function AdminModerationPanel({ onBack }: Props) {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
+    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: c.background }]}>
+      <View style={[styles.header, { borderBottomColor: c.borderLight }]}>
         <TouchableOpacity onPress={onBack} style={styles.backBtn}>
-          <ArrowLeft size={22} color="#111827" strokeWidth={1.5} />
+          <ArrowLeft size={22} color={c.textPrimary} strokeWidth={1.5} />
         </TouchableOpacity>
-        <Text style={styles.title}>Moderation Queue</Text>
+        <Text style={[styles.title, { color: c.textPrimary }]}>Moderation Queue</Text>
         {reports.length > 0 && (
-          <View style={styles.countBadge}>
-            <Text style={styles.countText}>{reports.length}</Text>
+          <View style={[styles.countBadge, { backgroundColor: c.error }]}>
+            <Text style={[styles.countText, { color: c.background }]}>{reports.length}</Text>
           </View>
         )}
       </View>
 
       {loading ? (
         <View style={styles.centered}>
-          <ActivityIndicator color="#0064B1" />
+          <ActivityIndicator color={c.accent} />
         </View>
       ) : reports.length === 0 ? (
         <View style={styles.centered}>
-          <Text style={styles.emptyTitle}>All clear</Text>
-          <Text style={styles.emptySubtext}>No open reports</Text>
+          <Text style={[styles.emptyTitle, { color: c.textPrimary }]}>All clear</Text>
+          <Text style={[styles.emptySubtext, { color: c.textTertiary }]}>No open reports</Text>
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.list}>
@@ -113,6 +116,8 @@ function ReportRow({
   onToggle: () => void;
   onAction: (action: ModerationAction) => void;
 }) {
+  const { theme } = useTheme();
+  const c = theme.colors;
   const [targetName, setTargetName] = useState<string | null>(null);
 
   useEffect(() => {
@@ -126,21 +131,21 @@ function ReportRow({
   const isUnderReview = report.status === "under_review";
 
   return (
-    <View style={styles.reportCard}>
+    <View style={[styles.reportCard, { borderColor: c.borderLight }]}>
       <TouchableOpacity onPress={onToggle} activeOpacity={0.7} style={styles.reportRow}>
-        <View style={styles.reportIcon}>
+        <View style={[styles.reportIcon, { backgroundColor: c.surface }]}>
           {report.target_type === "user" ? (
-            <User size={16} color="#6B7280" strokeWidth={1.5} />
+            <User size={16} color={c.textSecondary} strokeWidth={1.5} />
           ) : (
-            <Package size={16} color="#6B7280" strokeWidth={1.5} />
+            <Package size={16} color={c.textSecondary} strokeWidth={1.5} />
           )}
         </View>
 
         <View style={styles.reportInfo}>
-          <Text style={styles.reportReason} numberOfLines={1}>
+          <Text style={[styles.reportReason, { color: c.textPrimary }]} numberOfLines={1}>
             {report.reason}
           </Text>
-          <Text style={styles.reportMeta}>
+          <Text style={[styles.reportMeta, { color: c.textTertiary }]}>
             {report.target_type === "user" ? "User" : "Listing"} ·{" "}
             by {report.reporter_name} · {formatAge(report.created_at)}
           </Text>
@@ -148,48 +153,48 @@ function ReportRow({
 
         <View style={styles.reportRight}>
           {isUnderReview && (
-            <View style={styles.reviewingBadge}>
-              <Text style={styles.reviewingText}>reviewing</Text>
+            <View style={[styles.reviewingBadge, { backgroundColor: c.warningSurface }]}>
+              <Text style={[styles.reviewingText, { color: c.warning }]}>reviewing</Text>
             </View>
           )}
           {expanded ? (
-            <ChevronUp size={16} color="#9CA3AF" strokeWidth={1.5} />
+            <ChevronUp size={16} color={c.textTertiary} strokeWidth={1.5} />
           ) : (
-            <ChevronDown size={16} color="#9CA3AF" strokeWidth={1.5} />
+            <ChevronDown size={16} color={c.textTertiary} strokeWidth={1.5} />
           )}
         </View>
       </TouchableOpacity>
 
       {expanded && (
-        <View style={styles.expandedBody}>
+        <View style={[styles.expandedBody, { borderTopColor: c.borderLight }]}>
           {report.note ? (
-            <Text style={styles.reportNote}>"{report.note}"</Text>
+            <Text style={[styles.reportNote, { color: c.textSecondary }]}>"{report.note}"</Text>
           ) : null}
 
-          <Text style={styles.targetLabel}>
+          <Text style={[styles.targetLabel, { color: c.textTertiary }]}>
             {report.target_type === "user" ? "User: " : "Listing: "}
-            <Text style={styles.targetName}>
-              {targetName ?? "Loading…"}
+            <Text style={[styles.targetName, { color: c.textPrimary }]}>
+              {targetName ?? "Loading..."}
             </Text>
           </Text>
 
           {acting ? (
-            <ActivityIndicator color="#0064B1" style={styles.actingSpinner} />
+            <ActivityIndicator color={c.accent} style={styles.actingSpinner} />
           ) : (
             <View style={styles.actionRow}>
               <ActionButton
                 label="Dismiss"
-                color="#6B7280"
+                color={c.textSecondary}
                 onPress={() => onAction("dismiss")}
               />
               <ActionButton
                 label="Escalate"
-                color="#D97706"
+                color={c.warning}
                 onPress={() => onAction("escalate")}
               />
               <ActionButton
                 label="Resolve"
-                color="#059669"
+                color={c.success}
                 onPress={() => onAction("resolve")}
               />
             </View>

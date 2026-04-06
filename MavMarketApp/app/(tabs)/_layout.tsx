@@ -4,13 +4,14 @@ import { Tabs } from "expo-router";
 import { House, Compass, MessageCircle, User, Plus } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CreateListingModal } from "../../components/CreateListingModal";
-
-const UTA_BLUE = "#0064B1";
+import { useTheme } from "../../lib/ThemeContext";
 
 // Custom tab bar with a raised center "+" button
 function CustomTabBar({ state, descriptors, navigation }: any) {
   const insets = useSafeAreaInsets();
   const [showCreate, setShowCreate] = useState(false);
+  const { theme } = useTheme();
+  const c = theme.colors;
 
   // Scale animation refs for each tab (indexed by position 0-4)
   const scales = useRef(
@@ -49,7 +50,12 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
       <View
         style={[
           styles.tabBarOuter,
-          { paddingBottom: insets.bottom, height: TAB_HEIGHT + insets.bottom },
+          {
+            paddingBottom: insets.bottom,
+            height: TAB_HEIGHT + insets.bottom,
+            backgroundColor: c.tabBar,
+            borderTopColor: c.tabBarBorder,
+          },
         ]}
       >
         {state.routes.map((route: any, index: number) => {
@@ -67,7 +73,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
             );
           }
 
-          const iconColor = isFocused ? UTA_BLUE : "#9CA3AF";
+          const iconColor = isFocused ? c.accentLight : c.textTertiary;
 
           return (
             <Animated.View
@@ -84,7 +90,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
               >
                 {options.tabBarIcon?.({ color: iconColor, size: 24, focused: isFocused })}
                 {/* Active dot indicator */}
-                {isFocused && <View style={styles.activeDot} />}
+                {isFocused && <View style={[styles.activeDot, { backgroundColor: c.accentLight }]} />}
               </TouchableOpacity>
             </Animated.View>
           );
@@ -107,7 +113,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
             accessibilityRole="button"
             accessibilityLabel="Create listing"
           >
-            <Plus size={26} color="#FFFFFF" strokeWidth={2.2} />
+            <Plus size={26} color={c.textPrimary} strokeWidth={2.2} />
           </TouchableOpacity>
         </Animated.View>
       </View>
@@ -181,10 +187,7 @@ export default function TabsLayout() {
 const styles = StyleSheet.create({
   tabBarOuter: {
     flexDirection: "row",
-    backgroundColor: "#FFFFFF",
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#E5E7EB",
-    // Shadow for depth
     ...Platform.select({
       ios: {
         shadowColor: "#000",
@@ -213,7 +216,6 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: UTA_BLUE,
   },
   // Center button
   centerBtnWrapper: {
@@ -226,7 +228,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: UTA_BLUE,
+    backgroundColor: "#0064B1",
     alignItems: "center",
     justifyContent: "center",
   },

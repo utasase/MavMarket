@@ -18,6 +18,7 @@ import { useLocalSearchParams } from "expo-router";
 import { ArrowLeft, Send, Camera, Bell, SquarePen, Search, X } from "lucide-react-native";
 import { type Notification } from "../data/mockData";
 import { useAuth } from "../lib/auth-context";
+import { useTheme } from "../lib/ThemeContext";
 import {
   getConversations,
   getMessages,
@@ -36,6 +37,8 @@ const { width } = Dimensions.get("window");
 type Tab = "messages" | "notifications";
 
 export function MessagesPage() {
+  const { theme } = useTheme();
+  const c = theme.colors;
   const { user } = useAuth();
   const { conversationId: pendingConversationId } = useLocalSearchParams<{ conversationId?: string }>();
   const [activeTab, setActiveTab] = useState<Tab>("messages");
@@ -161,10 +164,10 @@ export function MessagesPage() {
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: c.background }]}>
       {/* Header */}
-      <View style={styles.listHeader}>
-        <Text style={styles.listTitle}>
+      <View style={[styles.listHeader, { borderBottomColor: c.borderLight }]}>
+        <Text style={[styles.listTitle, { color: c.textPrimary }]}>
           {activeTab === "messages" ? "Messages" : "Notifications"}
         </Text>
         {activeTab === "messages" && (
@@ -172,31 +175,31 @@ export function MessagesPage() {
             onPress={() => setShowSearch(true)}
             style={styles.composeBtn}
           >
-            <SquarePen size={20} color="#0064B1" strokeWidth={1.5} />
+            <SquarePen size={20} color={c.accent} strokeWidth={1.5} />
           </TouchableOpacity>
         )}
       </View>
 
       {/* Tab Bar */}
-      <View style={styles.tabBar}>
+      <View style={[styles.tabBar, { borderBottomColor: c.borderLight, backgroundColor: c.background }]}>
         <TouchableOpacity
           onPress={() => setActiveTab("messages")}
-          style={[styles.tabBtn, activeTab === "messages" && styles.tabBtnActive]}
+          style={[styles.tabBtn, activeTab === "messages" && { borderBottomColor: c.accent }]}
         >
-          <Text style={[styles.tabLabel, activeTab === "messages" && styles.tabLabelActive]}>
+          <Text style={[styles.tabLabel, { color: c.textTertiary }, activeTab === "messages" && { color: c.accent, fontWeight: "600" }]}>
             Messages
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
           onPress={() => setActiveTab("notifications")}
-          style={[styles.tabBtn, activeTab === "notifications" && styles.tabBtnActive]}
+          style={[styles.tabBtn, activeTab === "notifications" && { borderBottomColor: c.accent }]}
         >
-          <Text style={[styles.tabLabel, activeTab === "notifications" && styles.tabLabelActive]}>
+          <Text style={[styles.tabLabel, { color: c.textTertiary }, activeTab === "notifications" && { color: c.accent, fontWeight: "600" }]}>
             Notifications
           </Text>
           {unreadCount > 0 && (
-            <View style={styles.notifBadge}>
-              <Text style={styles.notifBadgeText}>{unreadCount}</Text>
+            <View style={[styles.notifBadge, { backgroundColor: c.error }]}>
+              <Text style={[styles.notifBadgeText, { color: c.background }]}>{unreadCount}</Text>
             </View>
           )}
         </TouchableOpacity>
@@ -204,34 +207,34 @@ export function MessagesPage() {
 
       {/* User Search Overlay */}
       {showSearch && (
-        <View style={styles.searchOverlay}>
-          <View style={styles.searchHeader}>
+        <View style={[styles.searchOverlay, { backgroundColor: c.background }]}>
+          <View style={[styles.searchHeader, { borderBottomColor: c.borderLight }]}>
             <TouchableOpacity
               onPress={() => { setShowSearch(false); setSearchQuery(""); setSearchResults([]); }}
               style={styles.searchBackBtn}
             >
-              <ArrowLeft size={22} color="#111827" strokeWidth={1.5} />
+              <ArrowLeft size={22} color={c.textPrimary} strokeWidth={1.5} />
             </TouchableOpacity>
-            <View style={styles.searchInputWrapper}>
-              <Search size={16} color="#9CA3AF" strokeWidth={1.5} />
+            <View style={[styles.searchInputWrapper, { backgroundColor: c.surface }]}>
+              <Search size={16} color={c.textTertiary} strokeWidth={1.5} />
               <TextInput
-                style={styles.searchInput}
+                style={[styles.searchInput, { color: c.textPrimary }]}
                 placeholder="Search UTA students..."
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={c.textTertiary}
                 value={searchQuery}
                 onChangeText={handleSearch}
                 autoFocus
               />
               {searchQuery.length > 0 && (
                 <TouchableOpacity onPress={() => handleSearch("")}>
-                  <X size={16} color="#9CA3AF" strokeWidth={1.5} />
+                  <X size={16} color={c.textTertiary} strokeWidth={1.5} />
                 </TouchableOpacity>
               )}
             </View>
           </View>
           {searchLoading ? (
             <View style={styles.centered}>
-              <ActivityIndicator color="#0064B1" />
+              <ActivityIndicator color={c.accent} />
             </View>
           ) : (
             <FlatList
@@ -240,7 +243,7 @@ export function MessagesPage() {
               showsVerticalScrollIndicator={false}
               ListEmptyComponent={
                 <View style={styles.emptyState}>
-                  <Text style={styles.emptySubtext}>
+                  <Text style={[styles.emptySubtext, { color: c.border }]}>
                     {searchQuery.trim() ? "No users found" : "Search for UTA students by name"}
                   </Text>
                 </View>
@@ -254,13 +257,13 @@ export function MessagesPage() {
                   {item.avatar ? (
                     <Image source={{ uri: item.avatar }} style={styles.searchResultAvatar} />
                   ) : (
-                    <View style={[styles.searchResultAvatar, styles.avatarPlaceholder]}>
-                      <Text style={styles.avatarInitial}>
+                    <View style={[styles.searchResultAvatar, styles.avatarPlaceholder, { backgroundColor: c.border }]}>
+                      <Text style={[styles.avatarInitial, { color: c.textSecondary }]}>
                         {item.name.charAt(0).toUpperCase()}
                       </Text>
                     </View>
                   )}
-                  <Text style={styles.searchResultName}>{item.name}</Text>
+                  <Text style={[styles.searchResultName, { color: c.textPrimary }]}>{item.name}</Text>
                 </TouchableOpacity>
               )}
             />
@@ -273,7 +276,7 @@ export function MessagesPage() {
         <>
           {loadingConvos ? (
             <View style={styles.centered}>
-              <ActivityIndicator color="#0064B1" />
+              <ActivityIndicator color={c.accent} />
             </View>
           ) : (
             <FlatList
@@ -282,8 +285,8 @@ export function MessagesPage() {
               showsVerticalScrollIndicator={false}
               ListEmptyComponent={
                 <View style={styles.emptyState}>
-                  <Text style={styles.emptyText}>No messages yet</Text>
-                  <Text style={styles.emptySubtext}>
+                  <Text style={[styles.emptyText, { color: c.textTertiary }]}>No messages yet</Text>
+                  <Text style={[styles.emptySubtext, { color: c.border }]}>
                     Tap the compose button or "Message Seller" on a listing to start a conversation
                   </Text>
                 </View>
@@ -294,7 +297,7 @@ export function MessagesPage() {
                     setActiveConvo(item);
                     if (user) markConversationRead(user.id, item.id).catch(() => {});
                     setConversations((prev) =>
-                      prev.map((c) => (c.id === item.id ? { ...c, unread: 0 } : c))
+                      prev.map((cv) => (cv.id === item.id ? { ...cv, unread: 0 } : cv))
                     );
                   }}
                   style={styles.convoRow}
@@ -304,27 +307,27 @@ export function MessagesPage() {
                     {item.contactAvatar ? (
                       <Image source={{ uri: item.contactAvatar }} style={styles.convoAvatar} />
                     ) : (
-                      <View style={[styles.convoAvatar, styles.avatarPlaceholder]}>
-                        <Text style={styles.avatarInitial}>
+                      <View style={[styles.convoAvatar, styles.avatarPlaceholder, { backgroundColor: c.border }]}>
+                        <Text style={[styles.avatarInitial, { color: c.textSecondary }]}>
                           {item.contactName.charAt(0).toUpperCase()}
                         </Text>
                       </View>
                     )}
                     {item.unread > 0 && (
-                      <View style={styles.unreadBadge}>
-                        <Text style={styles.unreadText}>{item.unread}</Text>
+                      <View style={[styles.unreadBadge, { backgroundColor: c.error }]}>
+                        <Text style={[styles.unreadText, { color: c.background }]}>{item.unread}</Text>
                       </View>
                     )}
                   </View>
                   <View style={styles.convoInfo}>
                     <View style={styles.convoTop}>
-                      <Text style={[styles.convoName, item.unread > 0 && styles.boldText]}>
+                      <Text style={[styles.convoName, { color: c.textSecondary }, item.unread > 0 && { color: c.textPrimary, fontWeight: "600" }]}>
                         {item.contactName}
                       </Text>
-                      <Text style={styles.convoTime}>{item.lastMessageTime}</Text>
+                      <Text style={[styles.convoTime, { color: c.textTertiary }]}>{item.lastMessageTime}</Text>
                     </View>
                     <Text
-                      style={[styles.convoLastMsg, item.unread > 0 && styles.boldText]}
+                      style={[styles.convoLastMsg, { color: c.textTertiary }, item.unread > 0 && { color: c.textPrimary, fontWeight: "600" }]}
                       numberOfLines={1}
                     >
                       {item.lastMessage || "No messages yet"}
@@ -334,7 +337,7 @@ export function MessagesPage() {
                         {item.itemImage ? (
                           <Image source={{ uri: item.itemImage }} style={styles.convoItemThumb} />
                         ) : null}
-                        <Text style={styles.convoItemTitle} numberOfLines={1}>
+                        <Text style={[styles.convoItemTitle, { color: c.textTertiary }]} numberOfLines={1}>
                           {item.itemTitle}
                         </Text>
                       </View>
@@ -360,8 +363,8 @@ export function MessagesPage() {
             ))}
             {notificationsList.length === 0 && (
               <View style={styles.emptyNotif}>
-                <Bell size={32} color="#D1D5DB" strokeWidth={1.5} />
-                <Text style={styles.emptyNotifText}>No notifications</Text>
+                <Bell size={32} color={c.border} strokeWidth={1.5} />
+                <Text style={[styles.emptyNotifText, { color: c.textTertiary }]}>No notifications</Text>
               </View>
             )}
           </View>

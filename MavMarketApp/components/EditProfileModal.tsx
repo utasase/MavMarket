@@ -18,6 +18,7 @@ import { type UserProfile } from "../data/mockData";
 import { updateUserProfile } from "../lib/profile";
 import { pickAndUploadAvatarImage } from "../lib/storage";
 import { useAuth } from "../lib/auth-context";
+import { useTheme } from "../lib/ThemeContext";
 
 interface Props {
   visible: boolean;
@@ -29,6 +30,8 @@ interface Props {
 export function EditProfileModal({ visible, profile, onClose, onSaved }: Props) {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
+  const { theme } = useTheme();
+  const c = theme.colors;
 
   const [name, setName] = useState(profile.name);
   const [bio, setBio] = useState(profile.bio);
@@ -89,22 +92,22 @@ export function EditProfileModal({ visible, profile, onClose, onSaved }: Props) 
         style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
-        <View style={[styles.container, { paddingTop: insets.top + 8 }]}>
+        <View style={[styles.container, { paddingTop: insets.top + 8, backgroundColor: c.background }]}>
           {/* Header */}
-          <View style={styles.header}>
+          <View style={[styles.header, { borderBottomColor: c.borderLight }]}>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-              <X size={22} color="#111827" strokeWidth={1.5} />
+              <X size={22} color={c.textPrimary} strokeWidth={1.5} />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Edit Profile</Text>
+            <Text style={[styles.headerTitle, { color: c.textPrimary }]}>Edit Profile</Text>
             <TouchableOpacity
               onPress={handleSave}
               disabled={saving}
-              style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
+              style={[styles.saveBtn, { backgroundColor: c.accent }, saving && styles.saveBtnDisabled]}
             >
               {saving ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
+                <ActivityIndicator color={c.background} size="small" />
               ) : (
-                <Text style={styles.saveBtnText}>Save</Text>
+                <Text style={[styles.saveBtnText, { color: c.background }]}>Save</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -121,45 +124,45 @@ export function EditProfileModal({ visible, profile, onClose, onSaved }: Props) 
                 {avatarUrl ? (
                   <Image source={{ uri: avatarUrl }} style={styles.avatar} />
                 ) : (
-                  <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                    <Text style={styles.avatarInitial}>
+                  <View style={[styles.avatar, styles.avatarPlaceholder, { backgroundColor: c.border }]}>
+                    <Text style={[styles.avatarInitial, { color: c.textSecondary }]}>
                       {name.charAt(0).toUpperCase()}
                     </Text>
                   </View>
                 )}
-                <View style={styles.cameraOverlay}>
+                <View style={[styles.cameraOverlay, { backgroundColor: c.accent }]}>
                   {uploadingAvatar ? (
-                    <ActivityIndicator color="#FFFFFF" size="small" />
+                    <ActivityIndicator color={c.background} size="small" />
                   ) : (
-                    <Camera size={16} color="#FFFFFF" strokeWidth={1.5} />
+                    <Camera size={16} color={c.background} strokeWidth={1.5} />
                   )}
                 </View>
               </TouchableOpacity>
-              <Text style={styles.changePhotoText}>Change Photo</Text>
+              <Text style={[styles.changePhotoText, { color: c.accent }]}>Change Photo</Text>
             </View>
 
             {/* Name */}
             <View style={styles.field}>
-              <Text style={styles.label}>Name</Text>
+              <Text style={[styles.label, { color: c.textSecondary }]}>Name</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { backgroundColor: c.surface, borderColor: c.border, color: c.textPrimary }]}
                 value={name}
                 onChangeText={setName}
                 placeholder="Your name"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={c.textTertiary}
                 maxLength={60}
               />
             </View>
 
             {/* Bio */}
             <View style={styles.field}>
-              <Text style={styles.label}>Bio</Text>
+              <Text style={[styles.label, { color: c.textSecondary }]}>Bio</Text>
               <TextInput
-                style={[styles.input, styles.textArea]}
+                style={[styles.input, styles.textArea, { backgroundColor: c.surface, borderColor: c.border, color: c.textPrimary }]}
                 value={bio}
                 onChangeText={setBio}
                 placeholder="Tell buyers something about yourself..."
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={c.textTertiary}
                 multiline
                 numberOfLines={3}
                 maxLength={160}
@@ -168,31 +171,31 @@ export function EditProfileModal({ visible, profile, onClose, onSaved }: Props) 
 
             {/* Major */}
             <View style={styles.field}>
-              <Text style={styles.label}>Major</Text>
+              <Text style={[styles.label, { color: c.textSecondary }]}>Major</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { backgroundColor: c.surface, borderColor: c.border, color: c.textPrimary }]}
                 value={major}
                 onChangeText={setMajor}
                 placeholder="e.g. Computer Science"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={c.textTertiary}
                 maxLength={80}
               />
             </View>
 
             {/* Year */}
             <View style={styles.field}>
-              <Text style={styles.label}>Year</Text>
+              <Text style={[styles.label, { color: c.textSecondary }]}>Year</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { backgroundColor: c.surface, borderColor: c.border, color: c.textPrimary }]}
                 value={year}
                 onChangeText={setYear}
                 placeholder="e.g. Junior"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={c.textTertiary}
                 maxLength={40}
               />
             </View>
 
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            {error ? <Text style={[styles.errorText, { color: c.error }]}>{error}</Text> : null}
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
@@ -202,7 +205,7 @@ export function EditProfileModal({ visible, profile, onClose, onSaved }: Props) 
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  container: { flex: 1, backgroundColor: "#FFFFFF" },
+  container: { flex: 1 },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -210,12 +213,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
   },
   closeBtn: { padding: 4 },
-  headerTitle: { fontSize: 16, color: "#111827", fontWeight: "600" },
+  headerTitle: { fontSize: 16, fontWeight: "600" },
   saveBtn: {
-    backgroundColor: "#0064B1",
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
@@ -223,14 +224,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   saveBtnDisabled: { opacity: 0.5 },
-  saveBtnText: { color: "#FFFFFF", fontSize: 14, fontWeight: "600" },
+  saveBtnText: { fontSize: 14, fontWeight: "600" },
   scroll: { flex: 1 },
   scrollContent: { padding: 24, gap: 20, paddingBottom: 40 },
   avatarSection: { alignItems: "center", gap: 8 },
   avatarWrapper: { position: "relative" },
   avatar: { width: 88, height: 88, borderRadius: 44 },
-  avatarPlaceholder: { backgroundColor: "#E5E7EB", justifyContent: "center", alignItems: "center" },
-  avatarInitial: { fontSize: 32, color: "#6B7280" },
+  avatarPlaceholder: { justifyContent: "center", alignItems: "center" },
+  avatarInitial: { fontSize: 32 },
   cameraOverlay: {
     position: "absolute",
     bottom: 0,
@@ -238,23 +239,19 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: "#0064B1",
     justifyContent: "center",
     alignItems: "center",
   },
-  changePhotoText: { fontSize: 13, color: "#0064B1" },
+  changePhotoText: { fontSize: 13 },
   field: { gap: 6 },
-  label: { fontSize: 13, color: "#374151", fontWeight: "500" },
+  label: { fontSize: 13, fontWeight: "500" },
   input: {
-    backgroundColor: "#F9FAFB",
     borderWidth: 1,
-    borderColor: "#E5E7EB",
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 14,
-    color: "#111827",
   },
   textArea: { minHeight: 80, textAlignVertical: "top" },
-  errorText: { fontSize: 13, color: "#EF4444", textAlign: "center" },
+  errorText: { fontSize: 13, textAlign: "center" },
 });

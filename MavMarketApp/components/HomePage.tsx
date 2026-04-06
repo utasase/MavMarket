@@ -21,11 +21,14 @@ import { SettingsPanel } from "./SettingsPanel";
 import { getListings } from "../lib/listings";
 import { useAuth } from "../lib/auth-context";
 import { getSavedListingIds, saveItem, unsaveItem } from "../lib/saved";
+import { useTheme } from "../lib/ThemeContext";
 
 const { width } = Dimensions.get("window");
 const CARD_WIDTH = (width - 1) / 2;
 
 export function HomePage() {
+  const { theme } = useTheme();
+  const c = theme.colors;
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
@@ -99,7 +102,7 @@ export function HomePage() {
   );
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: c.background }]}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
@@ -110,7 +113,7 @@ export function HomePage() {
             onPress={() => setShowSearch(!showSearch)}
             style={styles.iconBtn}
           >
-            <Search size={22} color="#111827" strokeWidth={1.5} />
+            <Search size={22} color={c.textPrimary} strokeWidth={1.5} />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => setShowFilters(!showFilters)}
@@ -118,7 +121,7 @@ export function HomePage() {
           >
             <SlidersHorizontal
               size={22}
-              color={showFilters ? "#0064B1" : "#111827"}
+              color={showFilters ? c.accent : c.textPrimary}
               strokeWidth={1.5}
             />
           </TouchableOpacity>
@@ -126,26 +129,26 @@ export function HomePage() {
             onPress={() => setShowSettings(true)}
             style={styles.iconBtn}
           >
-            <Menu size={22} color="#111827" strokeWidth={1.5} />
+            <Menu size={22} color={c.textPrimary} strokeWidth={1.5} />
           </TouchableOpacity>
         </View>
       </View>
 
       {/* Search Bar */}
       {showSearch && (
-        <View style={styles.searchBar}>
-          <Search size={16} color="#9CA3AF" style={{ marginRight: 8 }} />
+        <View style={[styles.searchBar, { backgroundColor: c.surface, borderColor: c.borderLight }]}>
+          <Search size={16} color={c.textTertiary} style={{ marginRight: 8 }} />
           <TextInput
             placeholder="Search..."
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor={c.textTertiary}
             value={searchQuery}
             onChangeText={setSearchQuery}
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: c.textPrimary }]}
             autoFocus
           />
           {searchQuery !== "" && (
             <TouchableOpacity onPress={() => setSearchQuery("")}>
-              <X size={16} color="#9CA3AF" />
+              <X size={16} color={c.textTertiary} />
             </TouchableOpacity>
           )}
         </View>
@@ -153,8 +156,8 @@ export function HomePage() {
 
       {/* Filter Panel */}
       {showFilters && (
-        <View style={styles.filterPanel}>
-          <Text style={styles.filterLabel}>Max Price</Text>
+        <View style={[styles.filterPanel, { borderBottomColor: c.borderLight }]}>
+          <Text style={[styles.filterLabel, { color: c.textSecondary }]}>Max Price</Text>
           <View style={styles.conditionRow}>
             {[50, 100, 250, 500, 1000].map((p) => (
               <TouchableOpacity
@@ -162,13 +165,15 @@ export function HomePage() {
                 onPress={() => setMaxPrice(p)}
                 style={[
                   styles.conditionChip,
-                  maxPrice === p && styles.conditionChipActive,
+                  { backgroundColor: c.surface },
+                  maxPrice === p && { backgroundColor: c.accent, borderColor: c.accent },
                 ]}
               >
                 <Text
                   style={[
                     styles.conditionChipText,
-                    maxPrice === p && styles.conditionChipTextActive,
+                    { color: c.textSecondary },
+                    maxPrice === p && { color: c.background },
                   ]}
                 >
                   {p === 1000 ? "Any" : `$${p}`}
@@ -176,24 +181,26 @@ export function HomePage() {
               </TouchableOpacity>
             ))}
           </View>
-          <Text style={styles.filterLabel}>Condition</Text>
+          <Text style={[styles.filterLabel, { color: c.textSecondary }]}>Condition</Text>
           <View style={styles.conditionRow}>
-            {["All", "Like New", "Good", "Fair"].map((c) => (
+            {["All", "Like New", "Good", "Fair"].map((cond) => (
               <TouchableOpacity
-                key={c}
-                onPress={() => setSelectedCondition(c)}
+                key={cond}
+                onPress={() => setSelectedCondition(cond)}
                 style={[
                   styles.conditionChip,
-                  selectedCondition === c && styles.conditionChipActive,
+                  { backgroundColor: c.surface },
+                  selectedCondition === cond && { backgroundColor: c.accent, borderColor: c.accent },
                 ]}
               >
                 <Text
                   style={[
                     styles.conditionChipText,
-                    selectedCondition === c && styles.conditionChipTextActive,
+                    { color: c.textSecondary },
+                    selectedCondition === cond && { color: c.background },
                   ]}
                 >
-                  {c}
+                  {cond}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -205,7 +212,7 @@ export function HomePage() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        style={styles.categoriesScroll}
+        style={[styles.categoriesScroll, { borderBottomColor: c.surface }]}
         contentContainerStyle={styles.categoriesContent}
       >
         {categories.map((cat) => (
@@ -214,12 +221,14 @@ export function HomePage() {
             onPress={() => setSelectedCategory(cat)}
             style={[
               styles.categoryChip,
-              selectedCategory === cat && styles.categoryChipActive,
+              { borderColor: c.border },
+              selectedCategory === cat && { backgroundColor: c.accent, borderColor: c.accent },
             ]}
           >
             <Text
               style={[
                 styles.categoryChipText,
+                { color: c.textSecondary },
                 selectedCategory === cat && styles.categoryChipTextActive,
               ]}
             >
@@ -240,17 +249,17 @@ export function HomePage() {
         ListEmptyComponent={
           loadingListings ? (
             <View style={styles.emptyState}>
-              <ActivityIndicator color="#0064B1" />
+              <ActivityIndicator color={c.accent} />
             </View>
           ) : (
             <View style={styles.emptyState}>
-              <Search size={32} color="#D1D5DB" strokeWidth={1.5} />
-              <Text style={styles.emptyText}>No items found</Text>
-              <Text style={styles.emptySubtext}>Try adjusting your filters</Text>
+              <Search size={32} color={c.border} strokeWidth={1.5} />
+              <Text style={[styles.emptyText, { color: c.textTertiary }]}>No items found</Text>
+              <Text style={[styles.emptySubtext, { color: c.border }]}>Try adjusting your filters</Text>
             </View>
           )
         }
-        style={styles.list}
+        style={[styles.list, { backgroundColor: c.surface }]}
       />
 
       {/* Item Detail Overlay */}
@@ -305,6 +314,8 @@ function AnimatedCard({
   onPress: () => void;
   onToggleSave: () => void;
 }) {
+  const { theme } = useTheme();
+  const c = theme.colors;
   const scale = useRef(new Animated.Value(1)).current;
 
   const handlePressIn = () => {
@@ -315,7 +326,7 @@ function AnimatedCard({
   };
 
   return (
-    <Animated.View style={[styles.card, { transform: [{ scale }] }]}>
+    <Animated.View style={[styles.card, { transform: [{ scale }], backgroundColor: c.surfaceElevated }]}>
       <TouchableOpacity
         onPress={onPress}
         onPressIn={handlePressIn}
@@ -331,29 +342,29 @@ function AnimatedCard({
           >
             <Heart
               size={20}
-              color={isSaved ? "#EF4444" : "#FFFFFF"}
-              fill={isSaved ? "#EF4444" : "transparent"}
+              color={isSaved ? c.error : "#FFFFFF"}
+              fill={isSaved ? c.error : "transparent"}
               strokeWidth={1.5}
             />
           </TouchableOpacity>
-          <View style={styles.priceBadge}>
+          <View style={[styles.priceBadge, { backgroundColor: c.overlay }]}>
             <Text style={styles.priceBadgeText}>${item.price}</Text>
           </View>
         </View>
         <View style={styles.cardCaption}>
-          <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
+          <Text style={[styles.cardTitle, { color: c.textPrimary }]} numberOfLines={1}>{item.title}</Text>
           <View style={styles.cardMeta}>
-            <View style={[styles.conditionPill, { backgroundColor: conditionColor(item.condition) + "22" }]}>
-              <Text style={[styles.conditionPillText, { color: conditionColor(item.condition) }]}>
+            <View style={[styles.conditionPill, { backgroundColor: conditionColor(item.condition, c) + "22" }]}>
+              <Text style={[styles.conditionPillText, { color: conditionColor(item.condition, c) }]}>
                 {item.condition}
               </Text>
             </View>
           </View>
           <View style={styles.cardSellerRow}>
             <Image source={{ uri: item.sellerAvatar }} style={styles.cardSellerAvatar} />
-            <Text style={styles.cardSellerName}>{item.sellerName}</Text>
-            <Text style={styles.cardDot}>·</Text>
-            <Text style={styles.cardPostedAt}>{item.postedAt}</Text>
+            <Text style={[styles.cardSellerName, { color: c.textTertiary }]}>{item.sellerName}</Text>
+            <Text style={[styles.cardDot, { color: c.border }]}>·</Text>
+            <Text style={[styles.cardPostedAt, { color: c.textTertiary }]}>{item.postedAt}</Text>
           </View>
         </View>
       </TouchableOpacity>
@@ -361,20 +372,19 @@ function AnimatedCard({
   );
 }
 
-function conditionColor(condition: string): string {
+function conditionColor(condition: string, c: ReturnType<typeof useTheme>['theme']['colors']): string {
   switch (condition) {
-    case "New": return "#0064B1";
-    case "Like New": return "#059669";
-    case "Good": return "#D97706";
-    case "Fair": return "#9CA3AF";
-    default: return "#9CA3AF";
+    case "New": return c.accent;
+    case "Like New": return c.success;
+    case "Good": return c.warning;
+    case "Fair": return c.textTertiary;
+    default: return c.textTertiary;
   }
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
   },
   header: {
     flexDirection: "row",
@@ -390,7 +400,6 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 20,
-    color: "#111827",
     letterSpacing: -0.3,
   },
   headerRight: {
@@ -405,9 +414,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginHorizontal: 16,
     marginBottom: 8,
-    backgroundColor: "#F9FAFB",
     borderWidth: 1,
-    borderColor: "#F3F4F6",
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -415,19 +422,16 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 14,
-    color: "#111827",
     padding: 0,
   },
   filterPanel: {
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
     gap: 12,
   },
   filterLabel: {
     fontSize: 12,
-    color: "#6B7280",
   },
   conditionRow: {
     flexDirection: "row",
@@ -437,22 +441,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 100,
-    backgroundColor: "#F3F4F6",
-  },
-  conditionChipActive: {
-    backgroundColor: "#0064B1",
-    borderColor: "#0064B1",
   },
   conditionChipText: {
     fontSize: 12,
-    color: "#4B5563",
-  },
-  conditionChipTextActive: {
-    color: "#FFFFFF",
   },
   categoriesScroll: {
     borderBottomWidth: 1,
-    borderBottomColor: "#F9FAFB",
     flexGrow: 0,
     flexShrink: 0,
   },
@@ -466,16 +460,10 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 100,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
     alignSelf: "flex-start",
-  },
-  categoryChipActive: {
-    backgroundColor: "#0064B1",
-    borderColor: "#0064B1",
   },
   categoryChipText: {
     fontSize: 12,
-    color: "#6B7280",
   },
   categoryChipTextActive: {
     color: "#FFFFFF",
@@ -483,14 +471,12 @@ const styles = StyleSheet.create({
   },
   list: {
     flex: 1,
-    backgroundColor: "#F3F4F6",
   },
   row: {
     gap: 1,
   },
   card: {
     width: CARD_WIDTH,
-    backgroundColor: "#FFFFFF",
   },
   cardImageContainer: {
     width: CARD_WIDTH,
@@ -511,7 +497,6 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: 8,
     left: 8,
-    backgroundColor: "rgba(0,0,0,0.7)",
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
@@ -525,7 +510,6 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontSize: 14,
-    color: "#111827",
   },
   cardMeta: {
     flexDirection: "row",
@@ -556,15 +540,12 @@ const styles = StyleSheet.create({
   },
   cardSellerName: {
     fontSize: 11,
-    color: "#9CA3AF",
   },
   cardDot: {
     fontSize: 11,
-    color: "#D1D5DB",
   },
   cardPostedAt: {
     fontSize: 11,
-    color: "#9CA3AF",
   },
   emptyState: {
     flex: 1,
@@ -575,10 +556,8 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
-    color: "#9CA3AF",
   },
   emptySubtext: {
     fontSize: 12,
-    color: "#D1D5DB",
   },
 });
