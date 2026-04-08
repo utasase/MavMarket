@@ -3,6 +3,7 @@ import { type UserProfile, type ListingItem } from "../data/mockData";
 
 const UTA_LAT = 32.7299;
 const UTA_LNG = -97.1149;
+const PUBLIC_PROFILE_LISTING_STATUSES = ["active"] as const;
 
 export async function getCurrentUserProfile(userId: string): Promise<UserProfile | null> {
   const [userResult, followersResult, followingResult] = await Promise.all([
@@ -66,8 +67,11 @@ export async function unfollowUser(followerId: string, followingId: string): Pro
   if (error) throw error;
 }
 
-export async function getSellerListings(sellerId: string): Promise<ListingItem[]> {
-  const { data, error } = await supabase
+async function fetchSellerListings(
+  sellerId: string,
+  statuses?: readonly string[]
+): Promise<ListingItem[]> {
+  const baseQuery = supabase
     .from("listings")
     .select(`
       id, title, price, image_url, category, condition, description,
@@ -75,13 +79,23 @@ export async function getSellerListings(sellerId: string): Promise<ListingItem[]
       is_on_campus, status,
       seller:users(name, avatar_url, rating)
     `)
-    .eq("seller_id", sellerId)
-    .order("created_at", { ascending: false });
+    .eq("seller_id", sellerId);
+
+  const filteredQuery =
+    statuses && statuses.length > 0
+      ? baseQuery.in("status", Array.from(statuses))
+      : baseQuery;
+
+  const { data, error } = await filteredQuery.order("created_at", { ascending: false });
 
   if (error) throw error;
   if (!data) return [];
 
-  return data.map((row: any) => ({
+  return data.map(mapListingRow);
+}
+
+function mapListingRow(row: any): ListingItem {
+  return {
     id: row.id,
     title: row.title,
     price: row.price,
@@ -102,7 +116,15 @@ export async function getSellerListings(sellerId: string): Promise<ListingItem[]
       lng: UTA_LNG,
       isOnCampus: row.is_on_campus ?? true,
     },
-  }));
+  };
+}
+
+export async function getSellerListings(sellerId: string): Promise<ListingItem[]> {
+  return fetchSellerListings(sellerId);
+}
+
+export async function getPublicSellerListings(sellerId: string): Promise<ListingItem[]> {
+  return fetchSellerListings(sellerId, PUBLIC_PROFILE_LISTING_STATUSES);
 }
 
 export async function updateUserProfile(

@@ -20,7 +20,14 @@ import { getReviews, type Review } from "../lib/reviews";
 import { createReport, REPORT_REASONS } from "../lib/reports";
 import { EditProfileModal } from "./EditProfileModal";
 import { useAuth } from "../lib/auth-context";
-import { getCurrentUserProfile, getSellerListings, isFollowing, followUser, unfollowUser } from "../lib/profile";
+import {
+  getCurrentUserProfile,
+  getSellerListings,
+  getPublicSellerListings,
+  isFollowing,
+  followUser,
+  unfollowUser,
+} from "../lib/profile";
 import { deleteListing, markListingAsSold } from "../lib/listings";
 import { isCurrentUserAdmin } from "../lib/moderation";
 import { AdminModerationPanel } from "./AdminModerationPanel";
@@ -36,6 +43,7 @@ export function ProfilePage() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { userId: sellerUserId } = useLocalSearchParams<{ userId?: string }>();
+  const viewingOtherUser = !!sellerUserId && sellerUserId !== user?.id;
 
   const [profile, setProfile] = useState<UserProfile>(mockUser);
   const [listings, setListings] = useState<ListingItem[]>(mockUser.listings);
@@ -94,21 +102,26 @@ export function ProfilePage() {
   }, [user]);
 
   useEffect(() => {
+    if (viewingOtherUser) return;
     loadProfile();
-  }, [loadProfile]);
+  }, [loadProfile, viewingOtherUser]);
 
   // Show another user's profile when navigated here with a userId param
   useEffect(() => {
-    if (!sellerUserId || sellerUserId === user?.id) return;
+    if (!sellerUserId || sellerUserId === user?.id) {
+      setViewingProfile(null);
+      return;
+    }
+
     Promise.all([
       getCurrentUserProfile(sellerUserId),
-      getSellerListings(sellerUserId),
+      getPublicSellerListings(sellerUserId),
     ])
       .then(([prof, items]) => {
         if (prof) setViewingProfile({ ...prof, listings: items });
       })
       .catch(() => {});
-  }, [sellerUserId, user]);
+  }, [sellerUserId, user?.id]);
 
   const handleMarkSold = (item: ListingItem) => {
     Alert.alert("Mark as Sold", `Mark "${item.title}" as sold?`, [

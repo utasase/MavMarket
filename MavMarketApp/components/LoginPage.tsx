@@ -73,9 +73,20 @@ export function LoginPage() {
   const handleForgotPassword = async () => {
     if (!email.trim()) { setError("Enter your email first, then tap Forgot password"); return; }
     if (!validateEmail(email)) { setError("Please use your UTA email (@mavs.uta.edu)"); return; }
+    
     setError("");
-    await supabase.auth.resetPasswordForEmail(email);
-    setSuccess("Password reset email sent! Check your inbox.");
+    setSuccess("");
+    setLoading(true);
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      if (error) throw error;
+      setSuccess("Password reset email sent! Check your inbox.");
+    } catch (err: any) {
+      setError(err.message ?? "Failed to send reset email. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (mode === "welcome") {

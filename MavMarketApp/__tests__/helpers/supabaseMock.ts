@@ -93,6 +93,8 @@ class MockAuthClient {
     return { data: { session: this._user ? { user: this._user } : null }, error: null };
   }
 
+  resetPasswordForEmail = jest.fn().mockResolvedValue({ data: {}, error: null });
+
   onAuthStateChange = jest.fn().mockReturnValue({
     data: { subscription: { unsubscribe: jest.fn() } },
   });
