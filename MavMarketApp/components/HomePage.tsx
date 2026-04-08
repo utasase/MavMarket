@@ -47,7 +47,7 @@ export function HomePage() {
     setLoadingListings(true);
     getListings()
       .then((data) => {
-        if (data.length > 0) setAllListings(data);
+        setAllListings(data);
       })
       .catch((error) => {
         console.error("Listings fetch error:", error);
