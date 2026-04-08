@@ -106,6 +106,7 @@ Email validation enforces `@mavs.uta.edu` or `@uta.edu` on signup — **client-s
 | `lib/reviews.ts` | `getReviews(sellerId)`, `createReview()`, `hasReviewed()` |
 | `lib/reports.ts` | `createReport()`, `REPORT_REASONS`, `ReportTargetType` |
 | `lib/moderation.ts` | `getOpenReports()`, `takeModAction()`, `isCurrentUserAdmin()` — admin-only functions gated by `users.is_admin` |
+| `lib/payments.ts` | `buyNow()`, `createCheckoutSession()`, `getMyPayments()`, `calculateServiceFee()`, `calculateTotal()` — Stripe Checkout via edge functions |
 
 ### Mock Data Fallback
 
@@ -126,6 +127,7 @@ Current tables (all RLS-enabled, authenticated session required):
 | `reviews` | Added in migration `20240003`; trigger auto-updates `users.rating` on insert |
 | `reports` | Added in migration `20240004`; has `report_target_type` and `report_status` enums |
 | `message_reads` | Added in migration `20240005`; drives `unread` counts in conversations |
+| `payments` | Added in migration `20240012`; tracks Stripe Checkout payments with `payment_status` enum (`pending\|completed\|refunded\|failed`). RLS: users see own payments, admins see all, inserts/updates via service role |
 
 Supabase Storage: `listings` bucket (public). Authenticated users need insert permission to upload listing/avatar images. **Storage bucket RLS is not fully locked down yet** — a pending security task.
 
@@ -149,6 +151,23 @@ Two `supabase/` directories exist:
 | `20240009_rate_limiting.sql` | `rate_limit_log` / `is_rate_limited()` — abuse controls |
 | `20240010_storage_rls.sql` | Storage bucket RLS policies |
 | `20240011_follows.sql` | User follow/follower system |
+| `20240012_payments.sql` | `payments` table, `payment_status` enum, `stripe_customer_id` on users, `price > 0` constraint on listings |
+
+### Stripe Payments
+
+MavMarket uses Stripe Checkout (test mode) for Buy Now functionality. Architecture: platform-only (no Stripe Connect in v1).
+
+**Edge Functions** (deployed to Supabase, source in `supabase/functions/`):
+- `create-checkout-session` — JWT-protected. Creates a Stripe Checkout Session for a listing with 5% service fee. Validates listing is active, buyer ≠ seller, not already purchased.
+- `stripe-webhook` — No JWT (called by Stripe). Handles `checkout.session.completed` (marks payment + listing as sold, creates notification), `checkout.session.expired` (marks payment failed), `charge.refunded` (marks refunded, reactivates listing).
+
+**Fee Structure**: 5% service fee charged to buyer on top of listing price. Stripe processes 2.9% + $0.30 from total; MavMarket keeps the difference.
+
+**Required Supabase Secrets** (set via `supabase secrets set`):
+- `STRIPE_SECRET_KEY` — from Stripe Dashboard → API Keys (use `sk_test_...` for dev)
+- `STRIPE_WEBHOOK_SECRET` — from Stripe Dashboard → Webhooks → Signing secret
+
+**Webhook URL**: `https://mihvieqggagkfawfxiwh.supabase.co/functions/v1/stripe-webhook`
 
 ### Agent Coordination System
 

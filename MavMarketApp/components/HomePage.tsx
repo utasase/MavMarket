@@ -49,7 +49,8 @@ export function HomePage() {
       .then((data) => {
         if (data.length > 0) setAllListings(data);
       })
-      .catch(() => {
+      .catch((error) => {
+        console.error("Listings fetch error:", error);
         // Supabase not configured yet — mock data stays
       })
       .finally(() => setLoadingListings(false));

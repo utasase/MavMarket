@@ -18,6 +18,8 @@ export interface ListingItem {
     lng: number;
     isOnCampus: boolean;
   };
+  lockedBy?: string;
+  lockedAt?: string;
 }
 
 export interface Message {

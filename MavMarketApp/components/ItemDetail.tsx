@@ -13,7 +13,7 @@ import {
   TextInput,
   ActivityIndicator,
 } from "react-native";
-import { ChevronLeft, Heart, Flag, Star } from "lucide-react-native";
+import { ChevronLeft, Heart, Flag, Star, ShoppingCart } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { type ListingItem } from "../data/mockData";
@@ -25,6 +25,7 @@ import { createConversation } from "../lib/messages";
 import { getReviews, createReview, hasReviewed, type Review } from "../lib/reviews";
 import { createReport, REPORT_REASONS } from "../lib/reports";
 import { useTheme } from "../lib/ThemeContext";
+import { buyNow, calculateServiceFee, calculateTotal } from "../lib/payments";
 
 const { width } = Dimensions.get("window");
 
@@ -40,6 +41,7 @@ export function ItemDetail({ item, onBack, isSaved, onToggleSave }: ItemDetailPr
   const c = theme.colors;
   const [showReviews, setShowReviews] = useState(false);
   const [messagingLoading, setMessagingLoading] = useState(false);
+  const [buyingLoading, setBuyingLoading] = useState(false);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [showLeaveReview, setShowLeaveReview] = useState(false);
   const [reviewRating, setReviewRating] = useState(5);
@@ -52,6 +54,11 @@ export function ItemDetail({ item, onBack, isSaved, onToggleSave }: ItemDetailPr
 
   const isOwnListing = user && item.sellerId && user.id === item.sellerId;
   const canMessage = user && item.sellerId && !isOwnListing;
+  
+  // 15-minute checkout lock check
+  const isLocked = item.lockedAt ? new Date(item.lockedAt).getTime() > Date.now() - 15 * 60 * 1000 : false;
+  const isLockedByOther = Boolean(isLocked && (!user || item.lockedBy !== user.id));
+  const canBuy = canMessage; // We show the button but disable it if locked
 
   useEffect(() => {
     if (!item.sellerId) return;
@@ -77,6 +84,18 @@ export function ItemDetail({ item, onBack, isSaved, onToggleSave }: ItemDetailPr
     } finally {
       setMessagingLoading(false);
     }
+  };
+
+  const handleBuyNow = () => {
+    if (!canBuy || !user) return;
+    setBuyingLoading(true);
+    buyNow(
+      item.id,
+      item.title,
+      item.price,
+      () => setBuyingLoading(false),
+      () => setBuyingLoading(false)
+    );
   };
 
   const handleReport = () => {
@@ -220,6 +239,26 @@ export function ItemDetail({ item, onBack, isSaved, onToggleSave }: ItemDetailPr
 
       {/* Sticky action buttons */}
       <View style={[styles.actions, { paddingBottom: insets.bottom + 8, backgroundColor: c.background, borderTopColor: c.borderLight }]}>
+        {canBuy && (
+          <TouchableOpacity
+            onPress={isLockedByOther ? undefined : handleBuyNow}
+            disabled={buyingLoading || isLockedByOther}
+            style={[styles.buyNowBtn, (buyingLoading || isLockedByOther) && { opacity: 0.6, backgroundColor: c.textSecondary }]}
+          >
+            {buyingLoading ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <>
+                <ShoppingCart size={16} color="#FFFFFF" strokeWidth={2} />
+                <Text style={styles.buyNowText}>
+                  {isLockedByOther
+                    ? "Reserved - In Cart"
+                    : `Buy Now · $${calculateTotal(item.price).toFixed(2)}`}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           onPress={handleMessageSeller}
           disabled={messagingLoading || !canMessage}
@@ -451,6 +490,21 @@ const styles = StyleSheet.create({
   messageBtnText: {
     color: "#FFFFFF",
     fontSize: 14,
+  },
+  buyNowBtn: {
+    flex: 1,
+    backgroundColor: "#0064B1",
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+  },
+  buyNowText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "600",
   },
   saveBtn: {
     paddingHorizontal: 20,

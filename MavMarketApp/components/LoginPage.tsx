@@ -57,7 +57,14 @@ export function LoginPage() {
         setMode("login");
       }
     } catch (err: any) {
-      setError(err.message ?? "Something went wrong. Please try again.");
+      const msg = err.message?.toLowerCase() || "";
+      if (msg.includes("rate limit")) {
+        setError("Too many login attempts. Please wait a few minutes before trying again.");
+      } else if (msg.includes("invalid login credentials")) {
+        setError("Invalid email or password. Please try again.");
+      } else {
+        setError(err.message ?? "Something went wrong. Please try again.");
+      }
     } finally {
       setLoading(false);
     }

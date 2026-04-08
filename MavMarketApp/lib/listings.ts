@@ -37,7 +37,9 @@ export async function getListings(): Promise<ListingItem[]> {
       pickup_location_name,
       pickup_location_address,
       is_on_campus,
-      seller:users(name, avatar_url, rating)
+      locked_by,
+      locked_at,
+      seller:users!listings_seller_id_fkey(name, avatar_url, rating)
     `)
     .eq("status", "active")
     .order("created_at", { ascending: false });
@@ -66,6 +68,8 @@ export async function getListings(): Promise<ListingItem[]> {
       lng: UTA_LNG,
       isOnCampus: row.is_on_campus ?? true,
     },
+    lockedBy: row.locked_by,
+    lockedAt: row.locked_at,
   }));
 }
 
@@ -76,8 +80,8 @@ export async function getListingsByIds(ids: string[]): Promise<ListingItem[]> {
     .select(`
       id, title, price, image_url, category, condition, description,
       created_at, status, seller_id, pickup_location_name,
-      pickup_location_address, is_on_campus,
-      seller:users(name, avatar_url, rating)
+      pickup_location_address, is_on_campus, locked_by, locked_at,
+      seller:users!listings_seller_id_fkey(name, avatar_url, rating)
     `)
     .in("id", ids)
     .eq("status", "active");
@@ -105,6 +109,8 @@ export async function getListingsByIds(ids: string[]): Promise<ListingItem[]> {
       lng: UTA_LNG,
       isOnCampus: row.is_on_campus ?? true,
     },
+    lockedBy: row.locked_by,
+    lockedAt: row.locked_at,
   }));
 }
 
