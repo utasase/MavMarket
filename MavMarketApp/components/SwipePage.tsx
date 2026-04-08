@@ -16,13 +16,298 @@ import { X, Heart, RotateCcw, ShoppingBag } from "lucide-react-native";
 import { listings as mockListings, type ListingItem } from "../data/mockData";
 import { ItemDetail } from "./ItemDetail";
 import { getListings } from "../lib/listings";
+import { HeaderMenu } from "./HeaderMenu";
+import { useTheme } from "../lib/ThemeContext";
 
 const { width, height } = Dimensions.get("window");
 const CARD_WIDTH = Math.min(width - 32, 380);
 const CARD_HEIGHT = CARD_WIDTH * (4 / 3);
 const SWIPE_THRESHOLD = 100;
 
+const makeStyles = (c: any) => StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: c.background,
+  },
+  // Results
+  resultsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: c.borderLight,
+  },
+  resultsTitle: {
+    fontSize: 18,
+    color: c.textPrimary,
+  },
+  resultsCount: {
+    fontSize: 12,
+    color: c.textTertiary,
+  },
+  resultsList: {
+    padding: 16,
+    gap: 12,
+  },
+  resultItem: {
+    flexDirection: "row",
+    gap: 12,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: c.borderLight,
+    marginBottom: 12,
+  },
+  resultItemImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 10,
+  },
+  resultItemInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  resultItemTitle: {
+    fontSize: 14,
+    color: c.textPrimary,
+  },
+  resultItemPrice: {
+    fontSize: 14,
+    color: c.textPrimary,
+    marginTop: 2,
+  },
+  resultItemSeller: {
+    fontSize: 11,
+    color: c.textTertiary,
+    marginTop: 2,
+  },
+  emptyPicks: {
+    height: 192,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+  },
+  emptyPicksText: {
+    fontSize: 14,
+    color: c.textTertiary,
+  },
+  startOverContainer: {
+    padding: 16,
+  },
+  startOverBtn: {
+    backgroundColor: "#0064B1",
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  startOverBtnText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  // Discover
+  discoverHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  discoverTitle: {
+    fontSize: 18,
+    color: c.textPrimary,
+  },
+  likedCountBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#EFF6FF",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  likedCountText: {
+    fontSize: 14,
+    color: "#0064B1",
+    fontWeight: "600",
+  },
+  swipeArea: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 16,
+  },
+  cardStack: {
+    position: "relative",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  nextCard: {
+    position: "absolute",
+    borderRadius: 20,
+    overflow: "hidden",
+    opacity: 0.4,
+    transform: [{ scale: 0.95 }],
+  },
+  noMoreItems: {
+    alignItems: "center",
+    gap: 12,
+  },
+  noMoreText: {
+    fontSize: 14,
+    color: c.textTertiary,
+  },
+  startOverSmallBtn: {
+    backgroundColor: "#0064B1",
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginTop: 4,
+  },
+  startOverSmallText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  actionBtns: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 20,
+    paddingTop: 12,
+    paddingHorizontal: 16,
+  },
+  actionBtnSmall: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: c.border,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: c.surface,
+  },
+  actionBtnLarge: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 2,
+    borderColor: c.border,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: c.surface,
+  },
+  passBtn: {
+    borderColor: "#FECACA",
+    backgroundColor: "#FFF5F5",
+  },
+  wantBtnAction: {
+    borderColor: "#BFDBFE",
+    backgroundColor: "#EFF6FF",
+  },
+  // Swipe card
+  swipeCard: {
+    position: "absolute",
+    borderRadius: 20,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  wantLabel: {
+    position: "absolute",
+    top: 32,
+    left: 24,
+    borderWidth: 2,
+    borderColor: "#4ADE80",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    transform: [{ rotate: "-12deg" }],
+  },
+  wantText: {
+    color: "#4ADE80",
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  passLabel: {
+    position: "absolute",
+    top: 32,
+    right: 24,
+    borderWidth: 2,
+    borderColor: "#F87171",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    transform: [{ rotate: "12deg" }],
+  },
+  passText: {
+    color: "#F87171",
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  cardGradient: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 200,
+    backgroundColor: "rgba(0,0,0,0.55)",
+  },
+  cardOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingBottom: 20,
+    paddingTop: 16,
+    paddingHorizontal: 20,
+  },
+  cardOverlayContent: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
+  },
+  cardItemTitle: {
+    color: "#FFFFFF",
+    fontSize: 18,
+  },
+  cardSellerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 6,
+  },
+  cardSellerAvatar: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+  },
+  cardSellerName: {
+    color: "rgba(255,255,255,0.7)",
+    fontSize: 12,
+  },
+  cardPriceBadge: {
+    backgroundColor: "rgba(255,255,255,0.2)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  cardPriceText: {
+    color: "#FFFFFF",
+    fontSize: 18,
+  },
+});
+
 export function SwipePage() {
+  const { theme } = useTheme();
+  const c = theme.colors;
+  const styles = makeStyles(c);
+
   const [allItems, setAllItems] = useState<ListingItem[]>(mockListings);
   const [liked, setLiked] = useState<string[]>([]);
   const [passed, setPassed] = useState<string[]>([]);
@@ -139,13 +424,16 @@ export function SwipePage() {
       {/* Header */}
       <View style={styles.discoverHeader}>
         <Text style={styles.discoverTitle}>Discover</Text>
-        <TouchableOpacity
-          onPress={() => setShowResults(true)}
-          style={styles.likedCountBtn}
-        >
-          <Heart size={16} color="#0064B1" fill="#0064B1" strokeWidth={1.5} />
-          <Text style={styles.likedCountText}>{liked.length}</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <TouchableOpacity
+            onPress={() => setShowResults(true)}
+            style={styles.likedCountBtn}
+          >
+            <Heart size={16} color="#0064B1" fill="#0064B1" strokeWidth={1.5} />
+            <Text style={styles.likedCountText}>{liked.length}</Text>
+          </TouchableOpacity>
+          <HeaderMenu />
+        </View>
       </View>
 
       {/* Swipe Area */}
@@ -178,6 +466,7 @@ export function SwipePage() {
               exitDirection={exitDirection}
               cardWidth={CARD_WIDTH}
               cardHeight={CARD_HEIGHT}
+              styles={styles}
             />
           </View>
         )}
@@ -187,7 +476,7 @@ export function SwipePage() {
       {currentItem && (
         <View style={[styles.actionBtns, { paddingBottom: insets.bottom + 8 }]}>
           <SpringActionButton onPress={handleUndo} style={styles.actionBtnSmall}>
-            <RotateCcw size={18} color="#9CA3AF" />
+            <RotateCcw size={18} color={c.textTertiary} />
           </SpringActionButton>
           <SpringActionButton
             onPress={() => handleSwipe("left")}
@@ -205,7 +494,7 @@ export function SwipePage() {
             onPress={() => setShowResults(true)}
             style={styles.actionBtnSmall}
           >
-            <ShoppingBag size={18} color="#9CA3AF" />
+            <ShoppingBag size={18} color={c.textTertiary} />
           </SpringActionButton>
         </View>
       )}
@@ -219,12 +508,14 @@ function SwipeCard({
   exitDirection,
   cardWidth,
   cardHeight,
+  styles,
 }: {
   item: ListingItem;
   onSwipe: (direction: "left" | "right") => void;
   exitDirection: "left" | "right" | null;
   cardWidth: number;
   cardHeight: number;
+  styles: ReturnType<typeof makeStyles>;
 }) {
   const translateX = React.useRef(new Animated.Value(0)).current;
   const translateY = React.useRef(new Animated.Value(0)).current;
@@ -378,281 +669,3 @@ function SpringActionButton({
     </Animated.View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-  },
-  // Results
-  resultsHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
-  },
-  resultsTitle: {
-    fontSize: 18,
-    color: "#111827",
-  },
-  resultsCount: {
-    fontSize: 12,
-    color: "#9CA3AF",
-  },
-  resultsList: {
-    padding: 16,
-    gap: 12,
-  },
-  resultItem: {
-    flexDirection: "row",
-    gap: 12,
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#F3F4F6",
-    marginBottom: 12,
-  },
-  resultItemImage: {
-    width: 64,
-    height: 64,
-    borderRadius: 10,
-  },
-  resultItemInfo: {
-    flex: 1,
-    minWidth: 0,
-  },
-  resultItemTitle: {
-    fontSize: 14,
-    color: "#111827",
-  },
-  resultItemPrice: {
-    fontSize: 14,
-    color: "#111827",
-    marginTop: 2,
-  },
-  resultItemSeller: {
-    fontSize: 11,
-    color: "#9CA3AF",
-    marginTop: 2,
-  },
-  emptyPicks: {
-    height: 192,
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 8,
-  },
-  emptyPicksText: {
-    fontSize: 14,
-    color: "#9CA3AF",
-  },
-  startOverContainer: {
-    padding: 16,
-  },
-  startOverBtn: {
-    backgroundColor: "#0064B1",
-    paddingVertical: 14,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  startOverBtnText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  // Discover
-  discoverHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  discoverTitle: {
-    fontSize: 18,
-    color: "#111827",
-  },
-  likedCountBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "#EFF6FF",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  likedCountText: {
-    fontSize: 14,
-    color: "#0064B1",
-    fontWeight: "600",
-  },
-  swipeArea: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 16,
-  },
-  cardStack: {
-    position: "relative",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  nextCard: {
-    position: "absolute",
-    borderRadius: 20,
-    overflow: "hidden",
-    opacity: 0.4,
-    transform: [{ scale: 0.95 }],
-  },
-  noMoreItems: {
-    alignItems: "center",
-    gap: 12,
-  },
-  noMoreText: {
-    fontSize: 14,
-    color: "#9CA3AF",
-  },
-  startOverSmallBtn: {
-    backgroundColor: "#0064B1",
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    borderRadius: 10,
-    marginTop: 4,
-  },
-  startOverSmallText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  actionBtns: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 20,
-    paddingTop: 12,
-    paddingHorizontal: 16,
-  },
-  actionBtnSmall: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  actionBtnLarge: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    borderWidth: 2,
-    borderColor: "#E5E7EB",
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-  },
-  passBtn: {
-    borderColor: "#FECACA",
-    backgroundColor: "#FFF5F5",
-  },
-  wantBtnAction: {
-    borderColor: "#BFDBFE",
-    backgroundColor: "#EFF6FF",
-  },
-  // Swipe card
-  swipeCard: {
-    position: "absolute",
-    borderRadius: 20,
-    overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  wantLabel: {
-    position: "absolute",
-    top: 32,
-    left: 24,
-    borderWidth: 2,
-    borderColor: "#4ADE80",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    transform: [{ rotate: "-12deg" }],
-  },
-  wantText: {
-    color: "#4ADE80",
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  passLabel: {
-    position: "absolute",
-    top: 32,
-    right: 24,
-    borderWidth: 2,
-    borderColor: "#F87171",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    transform: [{ rotate: "12deg" }],
-  },
-  passText: {
-    color: "#F87171",
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  cardGradient: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 200,
-    backgroundColor: "rgba(0,0,0,0.55)",
-  },
-  cardOverlay: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingBottom: 20,
-    paddingTop: 16,
-    paddingHorizontal: 20,
-  },
-  cardOverlayContent: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-end",
-  },
-  cardItemTitle: {
-    color: "#FFFFFF",
-    fontSize: 18,
-  },
-  cardSellerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginTop: 6,
-  },
-  cardSellerAvatar: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-  },
-  cardSellerName: {
-    color: "rgba(255,255,255,0.7)",
-    fontSize: 12,
-  },
-  cardPriceBadge: {
-    backgroundColor: "rgba(255,255,255,0.2)",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 10,
-  },
-  cardPriceText: {
-    color: "#FFFFFF",
-    fontSize: 18,
-  },
-});

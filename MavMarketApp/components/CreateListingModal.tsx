@@ -19,6 +19,7 @@ import { categories } from "../data/mockData";
 import { createListing } from "../lib/listings";
 import { pickAndUploadListingImage } from "../lib/storage";
 import { useAuth } from "../lib/auth-context";
+import { useTheme } from "../lib/ThemeContext";
 
 const CONDITIONS = ["New", "Like New", "Good", "Fair"] as const;
 const LISTING_CATEGORIES = categories.filter((c) => c !== "All");
@@ -29,8 +30,96 @@ interface Props {
   onCreated: () => void;
 }
 
+const makeStyles = (c: any) => StyleSheet.create({
+  flex: { flex: 1 },
+  container: { flex: 1, backgroundColor: c.background },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: c.borderLight,
+  },
+  closeBtn: { padding: 4 },
+  headerTitle: { fontSize: 16, color: c.textPrimary, fontWeight: "600" },
+  postBtn: {
+    backgroundColor: "#0064B1",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    minWidth: 60,
+    alignItems: "center",
+  },
+  postBtnDisabled: { opacity: 0.5 },
+  postBtnText: { color: "#FFFFFF", fontSize: 14, fontWeight: "600" },
+  scroll: { flex: 1 },
+  scrollContent: { padding: 16, gap: 20, paddingBottom: 40 },
+  imagePicker: {
+    height: 180,
+    backgroundColor: c.surface,
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: 12,
+    borderStyle: "dashed",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    overflow: "hidden",
+  },
+  imagePreview: { width: "100%", height: "100%" },
+  imagePickerText: { fontSize: 14, color: c.textTertiary },
+  field: { gap: 6 },
+  label: { fontSize: 13, color: c.textSecondary, fontWeight: "500" },
+  input: {
+    backgroundColor: c.surface,
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: c.textPrimary,
+  },
+  textArea: { minHeight: 96, textAlignVertical: "top" },
+  picker: {
+    backgroundColor: c.surface,
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  pickerValue: { fontSize: 14, color: c.textPrimary },
+  pickerDropdown: {
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: 10,
+    backgroundColor: c.surface,
+    marginTop: 4,
+    overflow: "hidden",
+  },
+  pickerOption: { paddingHorizontal: 14, paddingVertical: 12 },
+  pickerOptionActive: { backgroundColor: c.borderLight },
+  pickerOptionText: { fontSize: 14, color: c.textSecondary },
+  pickerOptionTextActive: { color: c.textPrimary, fontWeight: "500" },
+  toggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  errorText: { fontSize: 13, color: "#EF4444", textAlign: "center" },
+});
+
 export function CreateListingModal({ visible, onClose, onCreated }: Props) {
   const { user } = useAuth();
+  const { theme } = useTheme();
+  const c = theme.colors;
+  const styles = makeStyles(c);
   const insets = useSafeAreaInsets();
 
   const [title, setTitle] = useState("");
@@ -122,7 +211,7 @@ export function CreateListingModal({ visible, onClose, onCreated }: Props) {
           {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
-              <X size={22} color="#111827" strokeWidth={1.5} />
+              <X size={22} color={c.textPrimary} strokeWidth={1.5} />
             </TouchableOpacity>
             <Text style={styles.headerTitle}>New Listing</Text>
             <TouchableOpacity
@@ -156,7 +245,7 @@ export function CreateListingModal({ visible, onClose, onCreated }: Props) {
                 <ActivityIndicator color="#0064B1" />
               ) : (
                 <>
-                  <Camera size={28} color="#9CA3AF" strokeWidth={1.5} />
+                  <Camera size={28} color={c.textTertiary} strokeWidth={1.5} />
                   <Text style={styles.imagePickerText}>Add Photo</Text>
                 </>
               )}
@@ -168,7 +257,7 @@ export function CreateListingModal({ visible, onClose, onCreated }: Props) {
               <TextInput
                 style={styles.input}
                 placeholder="What are you selling?"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={c.textTertiary}
                 value={title}
                 onChangeText={setTitle}
                 maxLength={80}
@@ -181,7 +270,7 @@ export function CreateListingModal({ visible, onClose, onCreated }: Props) {
               <TextInput
                 style={styles.input}
                 placeholder="0.00"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={c.textTertiary}
                 value={price}
                 onChangeText={setPrice}
                 keyboardType="decimal-pad"
@@ -196,18 +285,18 @@ export function CreateListingModal({ visible, onClose, onCreated }: Props) {
                 onPress={() => setShowCategoryPicker(!showCategoryPicker)}
               >
                 <Text style={styles.pickerValue}>{category}</Text>
-                <ChevronDown size={16} color="#6B7280" strokeWidth={1.5} />
+                <ChevronDown size={16} color={c.textSecondary} strokeWidth={1.5} />
               </TouchableOpacity>
               {showCategoryPicker && (
                 <View style={styles.pickerDropdown}>
-                  {LISTING_CATEGORIES.map((c) => (
+                  {LISTING_CATEGORIES.map((cat) => (
                     <TouchableOpacity
-                      key={c}
-                      style={[styles.pickerOption, category === c && styles.pickerOptionActive]}
-                      onPress={() => { setCategory(c); setShowCategoryPicker(false); }}
+                      key={cat}
+                      style={[styles.pickerOption, category === cat && styles.pickerOptionActive]}
+                      onPress={() => { setCategory(cat); setShowCategoryPicker(false); }}
                     >
-                      <Text style={[styles.pickerOptionText, category === c && styles.pickerOptionTextActive]}>
-                        {c}
+                      <Text style={[styles.pickerOptionText, category === cat && styles.pickerOptionTextActive]}>
+                        {cat}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -223,18 +312,18 @@ export function CreateListingModal({ visible, onClose, onCreated }: Props) {
                 onPress={() => setShowConditionPicker(!showConditionPicker)}
               >
                 <Text style={styles.pickerValue}>{condition}</Text>
-                <ChevronDown size={16} color="#6B7280" strokeWidth={1.5} />
+                <ChevronDown size={16} color={c.textSecondary} strokeWidth={1.5} />
               </TouchableOpacity>
               {showConditionPicker && (
                 <View style={styles.pickerDropdown}>
-                  {CONDITIONS.map((c) => (
+                  {CONDITIONS.map((cond) => (
                     <TouchableOpacity
-                      key={c}
-                      style={[styles.pickerOption, condition === c && styles.pickerOptionActive]}
-                      onPress={() => { setCondition(c); setShowConditionPicker(false); }}
+                      key={cond}
+                      style={[styles.pickerOption, condition === cond && styles.pickerOptionActive]}
+                      onPress={() => { setCondition(cond); setShowConditionPicker(false); }}
                     >
-                      <Text style={[styles.pickerOptionText, condition === c && styles.pickerOptionTextActive]}>
-                        {c}
+                      <Text style={[styles.pickerOptionText, condition === cond && styles.pickerOptionTextActive]}>
+                        {cond}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -248,7 +337,7 @@ export function CreateListingModal({ visible, onClose, onCreated }: Props) {
               <TextInput
                 style={[styles.input, styles.textArea]}
                 placeholder="Describe your item..."
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={c.textTertiary}
                 value={description}
                 onChangeText={setDescription}
                 multiline
@@ -263,14 +352,14 @@ export function CreateListingModal({ visible, onClose, onCreated }: Props) {
               <TextInput
                 style={styles.input}
                 placeholder="Location name"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={c.textTertiary}
                 value={pickupName}
                 onChangeText={setPickupName}
               />
               <TextInput
                 style={[styles.input, { marginTop: 8 }]}
                 placeholder="Address"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={c.textTertiary}
                 value={pickupAddress}
                 onChangeText={setPickupAddress}
               />
@@ -282,7 +371,7 @@ export function CreateListingModal({ visible, onClose, onCreated }: Props) {
               <Switch
                 value={isOnCampus}
                 onValueChange={setIsOnCampus}
-                trackColor={{ false: "#E5E7EB", true: "#0064B1" }}
+                trackColor={{ false: c.border, true: "#0064B1" }}
                 thumbColor="#FFFFFF"
               />
             </View>
@@ -294,88 +383,3 @@ export function CreateListingModal({ visible, onClose, onCreated }: Props) {
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  container: { flex: 1, backgroundColor: "#FFFFFF" },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
-  },
-  closeBtn: { padding: 4 },
-  headerTitle: { fontSize: 16, color: "#111827", fontWeight: "600" },
-  postBtn: {
-    backgroundColor: "#0064B1",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    minWidth: 60,
-    alignItems: "center",
-  },
-  postBtnDisabled: { opacity: 0.5 },
-  postBtnText: { color: "#FFFFFF", fontSize: 14, fontWeight: "600" },
-  scroll: { flex: 1 },
-  scrollContent: { padding: 16, gap: 20, paddingBottom: 40 },
-  imagePicker: {
-    height: 180,
-    backgroundColor: "#F9FAFB",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 12,
-    borderStyle: "dashed",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    overflow: "hidden",
-  },
-  imagePreview: { width: "100%", height: "100%" },
-  imagePickerText: { fontSize: 14, color: "#9CA3AF" },
-  field: { gap: 6 },
-  label: { fontSize: 13, color: "#374151", fontWeight: "500" },
-  input: {
-    backgroundColor: "#F9FAFB",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: "#111827",
-  },
-  textArea: { minHeight: 96, textAlignVertical: "top" },
-  picker: {
-    backgroundColor: "#F9FAFB",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  pickerValue: { fontSize: 14, color: "#111827" },
-  pickerDropdown: {
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 10,
-    backgroundColor: "#FFFFFF",
-    marginTop: 4,
-    overflow: "hidden",
-  },
-  pickerOption: { paddingHorizontal: 14, paddingVertical: 12 },
-  pickerOptionActive: { backgroundColor: "#F3F4F6" },
-  pickerOptionText: { fontSize: 14, color: "#374151" },
-  pickerOptionTextActive: { color: "#111827", fontWeight: "500" },
-  toggleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  errorText: { fontSize: 13, color: "#EF4444", textAlign: "center" },
-});

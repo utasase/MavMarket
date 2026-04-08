@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
+  Image,
   TouchableOpacity,
   ScrollView,
   StyleSheet,
@@ -12,10 +13,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ArrowLeft, User, Package, ChevronDown, ChevronUp } from "lucide-react-native";
 import {
   getOpenReports,
-  getReportTargetName,
+  getReportTargetDetails,
   takeModAction,
   type Report,
   type ModerationAction,
+  type ReportTargetDetails,
 } from "../lib/moderation";
 import { useTheme } from "../lib/ThemeContext";
 
@@ -118,15 +120,17 @@ function ReportRow({
 }) {
   const { theme } = useTheme();
   const c = theme.colors;
-  const [targetName, setTargetName] = useState<string | null>(null);
+  const [targetDetails, setTargetDetails] = useState<ReportTargetDetails | null>(null);
 
   useEffect(() => {
-    if (expanded && targetName === null) {
-      getReportTargetName(report.target_type, report.target_id)
-        .then(setTargetName)
-        .catch(() => setTargetName("Unknown"));
+    if (expanded && targetDetails === null) {
+      getReportTargetDetails(report.target_type, report.target_id)
+        .then(setTargetDetails)
+        .catch(() =>
+          setTargetDetails({ type: report.target_type, name: "Unknown", imageUrl: null, subtitle: "" })
+        );
     }
-  }, [expanded, targetName, report.target_type, report.target_id]);
+  }, [expanded, targetDetails, report.target_type, report.target_id]);
 
   const isUnderReview = report.status === "under_review";
 
@@ -171,12 +175,38 @@ function ReportRow({
             <Text style={[styles.reportNote, { color: c.textSecondary }]}>"{report.note}"</Text>
           ) : null}
 
-          <Text style={[styles.targetLabel, { color: c.textTertiary }]}>
-            {report.target_type === "user" ? "User: " : "Listing: "}
-            <Text style={[styles.targetName, { color: c.textPrimary }]}>
-              {targetName ?? "Loading..."}
-            </Text>
-          </Text>
+          {/* Target preview card */}
+          {targetDetails === null ? (
+            <ActivityIndicator color={c.accent} style={{ marginVertical: 8 }} />
+          ) : (
+            <View style={[styles.targetCard, { backgroundColor: c.surface, borderColor: c.borderLight }]}>
+              {targetDetails.imageUrl ? (
+                <Image
+                  source={{ uri: targetDetails.imageUrl }}
+                  style={[
+                    styles.targetImage,
+                    targetDetails.type === "user" && styles.targetImageRound,
+                  ]}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={[styles.targetImagePlaceholder, { backgroundColor: c.border }]}>
+                  {targetDetails.type === "user"
+                    ? <User size={20} color={c.textTertiary} strokeWidth={1.5} />
+                    : <Package size={20} color={c.textTertiary} strokeWidth={1.5} />
+                  }
+                </View>
+              )}
+              <View style={styles.targetCardText}>
+                <Text style={[styles.targetName, { color: c.textPrimary }]} numberOfLines={1}>
+                  {targetDetails.name}
+                </Text>
+                <Text style={[styles.targetLabel, { color: c.textTertiary }]} numberOfLines={1}>
+                  {targetDetails.subtitle}
+                </Text>
+              </View>
+            </View>
+          )}
 
           {acting ? (
             <ActivityIndicator color={c.accent} style={styles.actingSpinner} />
@@ -304,8 +334,26 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
     marginTop: 8,
   },
+  targetCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 10,
+    gap: 10,
+  },
+  targetImage: { width: 48, height: 48, borderRadius: 6 },
+  targetImageRound: { borderRadius: 24 },
+  targetImagePlaceholder: {
+    width: 48,
+    height: 48,
+    borderRadius: 6,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  targetCardText: { flex: 1, gap: 2 },
   targetLabel: { fontSize: 12, color: "#9CA3AF" },
-  targetName: { color: "#111827" },
+  targetName: { fontSize: 14, fontWeight: "500", color: "#111827" },
   actingSpinner: { marginVertical: 8 },
   actionRow: { flexDirection: "row", gap: 8, marginTop: 4 },
   actionBtn: {

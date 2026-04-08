@@ -31,6 +31,7 @@ import {
 } from "../lib/messages";
 import { getNotifications, markNotificationAsRead } from "../lib/notifications";
 import { searchUsers } from "../lib/profile";
+import { HeaderMenu } from "./HeaderMenu";
 
 const { width } = Dimensions.get("window");
 
@@ -170,14 +171,14 @@ export function MessagesPage() {
         <Text style={[styles.listTitle, { color: c.textPrimary }]}>
           {activeTab === "messages" ? "Messages" : "Notifications"}
         </Text>
-        {activeTab === "messages" && (
-          <TouchableOpacity
-            onPress={() => setShowSearch(true)}
-            style={styles.composeBtn}
-          >
-            <SquarePen size={20} color={c.accent} strokeWidth={1.5} />
-          </TouchableOpacity>
-        )}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+          {activeTab === "messages" && (
+            <TouchableOpacity onPress={() => setShowSearch(true)} style={styles.composeBtn}>
+              <SquarePen size={20} color={c.accent} strokeWidth={1.5} />
+            </TouchableOpacity>
+          )}
+          <HeaderMenu />
+        </View>
       </View>
 
       {/* Tab Bar */}

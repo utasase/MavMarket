@@ -13,10 +13,54 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Mail, Lock, Eye, EyeOff, ArrowRight, User, ChevronLeft } from "lucide-react-native";
 import { MavLogo } from "./MavLogo";
 import { supabase } from "../lib/supabase";
+import { useTheme } from "../lib/ThemeContext";
 
 type AuthMode = "welcome" | "login" | "signup";
 
+const makeStyles = (c: any) => StyleSheet.create({
+  screen: { flex: 1, backgroundColor: c.background },
+  welcomeCenter: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 },
+  logoBox: { width: 80, height: 80, borderRadius: 16, overflow: "hidden", shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 8, elevation: 6 },
+  welcomeTextContainer: { alignItems: "center", marginTop: 24 },
+  welcomeTitle: { fontSize: 24, color: c.textPrimary, letterSpacing: -0.5 },
+  welcomeSubtitle: { fontSize: 14, color: c.textTertiary, marginTop: 8, textAlign: "center", lineHeight: 22 },
+  welcomeButtons: { paddingHorizontal: 24, paddingBottom: 16, gap: 12 },
+  primaryBtn: { backgroundColor: c.textPrimary, paddingVertical: 14, borderRadius: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  primaryBtnText: { color: c.background, fontSize: 14 },
+  secondaryBtn: { backgroundColor: c.background, paddingVertical: 14, borderRadius: 12, alignItems: "center", borderWidth: 1, borderColor: c.border },
+  secondaryBtnText: { color: c.textPrimary, fontSize: 14 },
+  disclaimer: { textAlign: "center", fontSize: 11, color: c.textTertiary, marginTop: 4 },
+  formScroll: { flexGrow: 1, paddingHorizontal: 24 },
+  backBtn: { padding: 4, marginLeft: -4, marginBottom: 8 },
+  formHeading: { marginTop: 16 },
+  formTitle: { fontSize: 24, color: c.textPrimary },
+  formSubtitle: { fontSize: 14, color: c.textTertiary, marginTop: 4 },
+  fields: { marginTop: 32, gap: 16 },
+  field: { gap: 6 },
+  fieldLabel: { fontSize: 12, color: c.textSecondary },
+  inputWrapper: { flexDirection: "row", alignItems: "center", backgroundColor: c.surface, borderWidth: 1, borderColor: c.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, position: "relative" },
+  inputIcon: { marginRight: 8 },
+  input: { flex: 1, fontSize: 14, color: c.textPrimary, padding: 0 },
+  eyeBtn: { marginLeft: 8, padding: 2 },
+  errorText: { fontSize: 12, color: "#EF4444" },
+  successText: { fontSize: 12, color: "#16A34A" },
+  forgotBtn: { alignSelf: "flex-end" },
+  forgotText: { fontSize: 12, color: "#0064B1" },
+  submitContainer: { marginTop: 24, gap: 16 },
+  submitBtn: { backgroundColor: "#0064B1", paddingVertical: 14, borderRadius: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  submitBtnDisabled: { opacity: 0.7 },
+  submitBtnText: { color: "#FFFFFF", fontSize: 14 },
+  loadingDots: { flexDirection: "row", gap: 4 },
+  loadingDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#FFFFFF" },
+  switchModeText: { textAlign: "center", fontSize: 11, color: c.textTertiary },
+  switchModeLink: { color: "#0064B1" },
+});
+
 export function LoginPage() {
+  const { theme } = useTheme();
+  const c = theme.colors;
+  const styles = makeStyles(c);
+
   const [mode, setMode] = useState<AuthMode>("welcome");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -95,7 +139,7 @@ export function LoginPage() {
         <View style={styles.welcomeButtons}>
           <TouchableOpacity onPress={() => setMode("login")} style={styles.primaryBtn} activeOpacity={0.85}>
             <Text style={styles.primaryBtnText}>Log In</Text>
-            <ArrowRight size={16} color="#FFFFFF" />
+            <ArrowRight size={16} color={c.background} />
           </TouchableOpacity>
           <TouchableOpacity onPress={() => setMode("signup")} style={styles.secondaryBtn} activeOpacity={0.85}>
             <Text style={styles.secondaryBtnText}>Create Account</Text>
@@ -114,7 +158,7 @@ export function LoginPage() {
         showsVerticalScrollIndicator={false}
       >
         <TouchableOpacity onPress={() => { setMode("welcome"); setError(""); setSuccess(""); }} style={styles.backBtn}>
-          <ChevronLeft size={24} color="#111827" strokeWidth={1.5} />
+          <ChevronLeft size={24} color={c.textPrimary} strokeWidth={1.5} />
         </TouchableOpacity>
 
         <View style={styles.formHeading}>
@@ -129,11 +173,11 @@ export function LoginPage() {
             <View style={styles.field}>
               <Text style={styles.fieldLabel}>Full Name</Text>
               <View style={styles.inputWrapper}>
-                <User size={16} color="#9CA3AF" style={styles.inputIcon} />
+                <User size={16} color={c.textTertiary} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   placeholder="Your full name"
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={c.textTertiary}
                   value={name}
                   onChangeText={(t) => { setName(t); setError(""); }}
                   autoCapitalize="words"
@@ -145,11 +189,11 @@ export function LoginPage() {
           <View style={styles.field}>
             <Text style={styles.fieldLabel}>UTA Email</Text>
             <View style={styles.inputWrapper}>
-              <Mail size={16} color="#9CA3AF" style={styles.inputIcon} />
+              <Mail size={16} color={c.textTertiary} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
                 placeholder="yourname@mavs.uta.edu"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={c.textTertiary}
                 value={email}
                 onChangeText={(t) => { setEmail(t); setError(""); setSuccess(""); }}
                 keyboardType="email-address"
@@ -162,18 +206,18 @@ export function LoginPage() {
           <View style={styles.field}>
             <Text style={styles.fieldLabel}>Password</Text>
             <View style={styles.inputWrapper}>
-              <Lock size={16} color="#9CA3AF" style={styles.inputIcon} />
+              <Lock size={16} color={c.textTertiary} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
                 placeholder="At least 6 characters"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={c.textTertiary}
                 value={password}
                 onChangeText={(t) => { setPassword(t); setError(""); }}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
               />
               <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
-                {showPassword ? <EyeOff size={16} color="#9CA3AF" /> : <Eye size={16} color="#9CA3AF" />}
+                {showPassword ? <EyeOff size={16} color={c.textTertiary} /> : <Eye size={16} color={c.textTertiary} />}
               </TouchableOpacity>
             </View>
           </View>
@@ -218,42 +262,3 @@ export function LoginPage() {
     </KeyboardAvoidingView>
   );
 }
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#FFFFFF" },
-  welcomeCenter: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 },
-  logoBox: { width: 80, height: 80, borderRadius: 16, overflow: "hidden", shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 8, elevation: 6 },
-  welcomeTextContainer: { alignItems: "center", marginTop: 24 },
-  welcomeTitle: { fontSize: 24, color: "#111827", letterSpacing: -0.5 },
-  welcomeSubtitle: { fontSize: 14, color: "#9CA3AF", marginTop: 8, textAlign: "center", lineHeight: 22 },
-  welcomeButtons: { paddingHorizontal: 24, paddingBottom: 16, gap: 12 },
-  primaryBtn: { backgroundColor: "#111827", paddingVertical: 14, borderRadius: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
-  primaryBtnText: { color: "#FFFFFF", fontSize: 14 },
-  secondaryBtn: { backgroundColor: "#FFFFFF", paddingVertical: 14, borderRadius: 12, alignItems: "center", borderWidth: 1, borderColor: "#E5E7EB" },
-  secondaryBtnText: { color: "#111827", fontSize: 14 },
-  disclaimer: { textAlign: "center", fontSize: 11, color: "#9CA3AF", marginTop: 4 },
-  formScroll: { flexGrow: 1, paddingHorizontal: 24 },
-  backBtn: { padding: 4, marginLeft: -4, marginBottom: 8 },
-  formHeading: { marginTop: 16 },
-  formTitle: { fontSize: 24, color: "#111827" },
-  formSubtitle: { fontSize: 14, color: "#9CA3AF", marginTop: 4 },
-  fields: { marginTop: 32, gap: 16 },
-  field: { gap: 6 },
-  fieldLabel: { fontSize: 12, color: "#6B7280" },
-  inputWrapper: { flexDirection: "row", alignItems: "center", backgroundColor: "#F9FAFB", borderWidth: 1, borderColor: "#F3F4F6", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, position: "relative" },
-  inputIcon: { marginRight: 8 },
-  input: { flex: 1, fontSize: 14, color: "#111827", padding: 0 },
-  eyeBtn: { marginLeft: 8, padding: 2 },
-  errorText: { fontSize: 12, color: "#EF4444" },
-  successText: { fontSize: 12, color: "#16A34A" },
-  forgotBtn: { alignSelf: "flex-end" },
-  forgotText: { fontSize: 12, color: "#0064B1" },
-  submitContainer: { marginTop: 24, gap: 16 },
-  submitBtn: { backgroundColor: "#0064B1", paddingVertical: 14, borderRadius: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
-  submitBtnDisabled: { opacity: 0.7 },
-  submitBtnText: { color: "#FFFFFF", fontSize: 14 },
-  loadingDots: { flexDirection: "row", gap: 4 },
-  loadingDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#FFFFFF" },
-  switchModeText: { textAlign: "center", fontSize: 11, color: "#9CA3AF" },
-  switchModeLink: { color: "#0064B1" },
-});

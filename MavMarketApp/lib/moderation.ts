@@ -70,6 +70,48 @@ export async function getReportTargetName(
   }
 }
 
+export interface ReportTargetDetails {
+  type: "listing" | "user";
+  name: string;
+  imageUrl: string | null;
+  subtitle: string;
+}
+
+export async function getReportTargetDetails(
+  targetType: "listing" | "user",
+  targetId: string
+): Promise<ReportTargetDetails> {
+  if (targetType === "listing") {
+    const { data } = await supabase
+      .from("listings")
+      .select("title, price, status, image_url, seller:users!seller_id(name)")
+      .eq("id", targetId)
+      .single();
+    return {
+      type: "listing",
+      name: data?.title ?? "Deleted listing",
+      imageUrl: data?.image_url ?? null,
+      subtitle: data
+        ? `$${data.price} · ${data.status} · seller: ${(data.seller as any)?.name ?? "unknown"}`
+        : "Listing not found",
+    };
+  } else {
+    const { data } = await supabase
+      .from("users")
+      .select("name, avatar_url, rating")
+      .eq("id", targetId)
+      .single();
+    return {
+      type: "user",
+      name: data?.name ?? "Unknown user",
+      imageUrl: data?.avatar_url ?? null,
+      subtitle: data
+        ? `Rating: ${data.rating != null ? data.rating.toFixed(1) : "no rating"}`
+        : "User not found",
+    };
+  }
+}
+
 export async function takeModAction(params: {
   reportId: string;
   action: ModerationAction;

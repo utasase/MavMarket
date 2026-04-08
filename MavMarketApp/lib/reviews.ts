@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { createNotification } from "./notifications";
 
 export interface Review {
   id: string;
@@ -42,6 +43,26 @@ export async function createReview(params: {
   });
 
   if (error) throw error;
+
+  // Fire-and-forget: notify the seller
+  supabase
+    .from("users")
+    .select("name, avatar_url")
+    .eq("id", user.id)
+    .single()
+    .then(async ({ data: reviewer }) => {
+      const stars = "★".repeat(params.rating) + "☆".repeat(5 - params.rating);
+      await createNotification({
+        userId: params.sellerId,
+        type: "review",
+        title: `New review ${stars}`,
+        message: params.comment
+          ? `${reviewer?.name ?? "Someone"}: "${params.comment.slice(0, 80)}"`
+          : `${reviewer?.name ?? "Someone"} left you a ${params.rating}-star review`,
+        avatarUrl: reviewer?.avatar_url ?? undefined,
+      });
+    })
+    .catch(() => { /* best-effort — never crash createReview */ });
 }
 
 /** Returns true if the current user has already reviewed this seller for this listing */

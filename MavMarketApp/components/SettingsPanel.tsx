@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
+  Alert,
   TouchableOpacity,
   Animated,
   ScrollView,
@@ -13,25 +14,31 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { X, ChevronRight, Bell, Shield, HelpCircle, Info, Heart } from "lucide-react-native";
+import { X, ChevronRight, Bell, Shield, HelpCircle, Info, Heart, LogOut, Moon, Sun } from "lucide-react-native";
 import { type ListingItem } from "../data/mockData";
 import { ItemDetail } from "./ItemDetail";
 import { useAuth } from "../lib/auth-context";
 import { getNotificationPreferences, updateNotificationPreferences } from "../lib/profile";
 import { getListingsByIds } from "../lib/listings";
+import { supabase } from "../lib/supabase";
+import { useTheme } from "../lib/ThemeContext";
 
 const { width } = Dimensions.get("window");
 
 interface SettingsPanelProps {
   isOpen: boolean;
   onClose: () => void;
-  savedItemIds: string[];
-  onToggleSave: (id: string) => void;
+  savedItemIds?: string[];
+  onToggleSave?: (id: string) => void;
+  onAdminPress?: () => void;
+  isAdmin?: boolean;
 }
 
 type ViewMode = "main" | "notifications" | "saved";
 
-export function SettingsPanel({ isOpen, onClose, savedItemIds, onToggleSave }: SettingsPanelProps) {
+export function SettingsPanel({ isOpen, onClose, savedItemIds = [], onToggleSave, onAdminPress, isAdmin = false }: SettingsPanelProps) {
+  const { theme, isDark, toggleTheme } = useTheme();
+  const c = theme.colors;
   const [viewMode, setViewMode] = useState<ViewMode>("main");
   const [selectedItem, setSelectedItem] = useState<ListingItem | null>(null);
   const [savedItems, setSavedItems] = useState<ListingItem[]>([]);
@@ -45,24 +52,35 @@ export function SettingsPanel({ isOpen, onClose, savedItemIds, onToggleSave }: S
   const slideX = useRef(new Animated.Value(width)).current;
   const { user } = useAuth();
 
+  const styles = makeStyles(c);
+
+  // Animation only — isolated so data loading never interrupts the slide.
   useEffect(() => {
     if (isOpen) {
-      Animated.spring(slideX, { toValue: 0, damping: 30, stiffness: 300, useNativeDriver: true }).start();
-      if (user) {
-        getNotificationPreferences(user.id)
-          .then((prefs) => {
-            if (Object.keys(prefs).length > 0) setNotifPrefs((prev) => ({ ...prev, ...prefs }));
-          })
-          .catch(() => {});
-      }
-      // Fetch live data for saved listing IDs from the DB.
-      getListingsByIds(savedItemIds)
-        .then(setSavedItems)
-        .catch(() => setSavedItems([]));
+      Animated.timing(slideX, {
+        toValue: 0,
+        duration: 280,
+        useNativeDriver: true,
+      }).start();
     } else {
       slideX.setValue(width);
     }
-  }, [isOpen, user, savedItemIds]);
+  }, [isOpen]);
+
+  // Data loading — runs once when the panel opens.
+  useEffect(() => {
+    if (!isOpen) return;
+    if (user) {
+      getNotificationPreferences(user.id)
+        .then((prefs) => {
+          if (Object.keys(prefs).length > 0) setNotifPrefs((prev) => ({ ...prev, ...prefs }));
+        })
+        .catch(() => {});
+    }
+    getListingsByIds(savedItemIds)
+      .then(setSavedItems)
+      .catch(() => setSavedItems([]));
+  }, [isOpen, user]);
 
   const handleNotifToggle = (key: string, value: boolean) => {
     const updated = { ...notifPrefs, [key]: value };
@@ -91,14 +109,14 @@ export function SettingsPanel({ isOpen, onClose, savedItemIds, onToggleSave }: S
 
       {/* Panel */}
       <Animated.View
-        style={[styles.panel, { paddingTop: insets.top, transform: [{ translateX: slideX }] }]}
+        style={[styles.panel, { paddingTop: insets.top, transform: [{ translateX: slideX }], backgroundColor: c.background }]}
       >
         {viewMode === "main" && (
           <>
             <View style={styles.panelHeader}>
               <Text style={styles.panelTitle}>Settings and Activity</Text>
               <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
-                <X size={22} color="#111827" strokeWidth={1.5} />
+                <X size={22} color={c.textPrimary} strokeWidth={1.5} />
               </TouchableOpacity>
             </View>
 
@@ -110,12 +128,12 @@ export function SettingsPanel({ isOpen, onClose, savedItemIds, onToggleSave }: S
                   style={styles.menuRow}
                 >
                   <View style={styles.menuRowLeft}>
-                    <Heart size={20} color="#111827" strokeWidth={1.5} />
-                    <Text style={styles.menuLabel}>Saved Listings</Text>
+                    <Heart size={20} color={c.textPrimary} strokeWidth={1.5} />
+                    <Text style={[styles.menuLabel, { color: c.textPrimary }]}>Saved Listings</Text>
                   </View>
                   <View style={styles.menuRowRight}>
                     <Text style={styles.menuCount}>{savedItems.length}</Text>
-                    <ChevronRight size={18} color="#9CA3AF" />
+                    <ChevronRight size={18} color={c.textTertiary} />
                   </View>
                 </TouchableOpacity>
               </View>
@@ -125,36 +143,86 @@ export function SettingsPanel({ isOpen, onClose, savedItemIds, onToggleSave }: S
                 <Text style={styles.sectionHeader}>SETTINGS</Text>
               </View>
               <View style={styles.section}>
+                {/* Dark mode toggle */}
+                <TouchableOpacity onPress={toggleTheme} style={styles.menuRow}>
+                  <View style={styles.menuRowLeft}>
+                    {isDark ? <Sun size={20} color={c.textPrimary} strokeWidth={1.5} /> : <Moon size={20} color={c.textPrimary} strokeWidth={1.5} />}
+                    <Text style={[styles.menuLabel, { color: c.textPrimary }]}>{isDark ? "Light Mode" : "Dark Mode"}</Text>
+                  </View>
+                  <Switch
+                    value={isDark}
+                    onValueChange={toggleTheme}
+                    trackColor={{ false: "#D1D5DB", true: c.accent }}
+                    thumbColor="#FFFFFF"
+                  />
+                </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => setViewMode("notifications")}
                   style={styles.menuRow}
                 >
                   <View style={styles.menuRowLeft}>
-                    <Bell size={20} color="#111827" strokeWidth={1.5} />
-                    <Text style={styles.menuLabel}>Notifications</Text>
+                    <Bell size={20} color={c.textPrimary} strokeWidth={1.5} />
+                    <Text style={[styles.menuLabel, { color: c.textPrimary }]}>Notifications</Text>
                   </View>
-                  <ChevronRight size={18} color="#9CA3AF" />
+                  <ChevronRight size={18} color={c.textTertiary} />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.menuRow}>
                   <View style={styles.menuRowLeft}>
-                    <Shield size={20} color="#111827" strokeWidth={1.5} />
-                    <Text style={styles.menuLabel}>Privacy and Security</Text>
+                    <Shield size={20} color={c.textPrimary} strokeWidth={1.5} />
+                    <Text style={[styles.menuLabel, { color: c.textPrimary }]}>Privacy and Security</Text>
                   </View>
-                  <ChevronRight size={18} color="#9CA3AF" />
+                  <ChevronRight size={18} color={c.textTertiary} />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.menuRow}>
                   <View style={styles.menuRowLeft}>
-                    <HelpCircle size={20} color="#111827" strokeWidth={1.5} />
-                    <Text style={styles.menuLabel}>Help and Support</Text>
+                    <HelpCircle size={20} color={c.textPrimary} strokeWidth={1.5} />
+                    <Text style={[styles.menuLabel, { color: c.textPrimary }]}>Help and Support</Text>
                   </View>
-                  <ChevronRight size={18} color="#9CA3AF" />
+                  <ChevronRight size={18} color={c.textTertiary} />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.menuRow}>
                   <View style={styles.menuRowLeft}>
-                    <Info size={20} color="#111827" strokeWidth={1.5} />
-                    <Text style={styles.menuLabel}>About</Text>
+                    <Info size={20} color={c.textPrimary} strokeWidth={1.5} />
+                    <Text style={[styles.menuLabel, { color: c.textPrimary }]}>About</Text>
                   </View>
-                  <ChevronRight size={18} color="#9CA3AF" />
+                  <ChevronRight size={18} color={c.textTertiary} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Admin row — only visible to admins */}
+              {isAdmin && onAdminPress && (
+                <>
+                  <View style={styles.sectionHeaderContainer}>
+                    <Text style={styles.sectionHeader}>ADMIN</Text>
+                  </View>
+                  <View style={styles.section}>
+                    <TouchableOpacity onPress={() => { handleClose(); onAdminPress(); }} style={styles.menuRow}>
+                      <View style={styles.menuRowLeft}>
+                        <Shield size={20} color="#DC2626" strokeWidth={1.5} />
+                        <Text style={[styles.menuLabel, { color: "#DC2626" }]}>Moderation Queue</Text>
+                      </View>
+                      <ChevronRight size={18} color="#DC2626" />
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+
+              {/* Sign Out */}
+              <View style={styles.sectionHeaderContainer} />
+              <View style={styles.section}>
+                <TouchableOpacity
+                  onPress={() => {
+                    Alert.alert("Sign Out", "Are you sure you want to sign out?", [
+                      { text: "Cancel", style: "cancel" },
+                      { text: "Sign Out", style: "destructive", onPress: () => supabase.auth.signOut() },
+                    ]);
+                  }}
+                  style={styles.menuRow}
+                >
+                  <View style={styles.menuRowLeft}>
+                    <LogOut size={20} color="#EF4444" strokeWidth={1.5} />
+                    <Text style={[styles.menuLabel, { color: "#EF4444" }]}>Sign Out</Text>
+                  </View>
                 </TouchableOpacity>
               </View>
             </ScrollView>
@@ -163,9 +231,9 @@ export function SettingsPanel({ isOpen, onClose, savedItemIds, onToggleSave }: S
 
         {viewMode === "notifications" && (
           <>
-            <View style={styles.panelHeader}>
+            <View style={[styles.panelHeader, { backgroundColor: c.background }]}>
               <TouchableOpacity onPress={() => setViewMode("main")} style={styles.closeBtn}>
-                <X size={22} color="#111827" strokeWidth={1.5} />
+                <X size={22} color={c.textPrimary} strokeWidth={1.5} />
               </TouchableOpacity>
               <Text style={styles.panelTitle}>Notification Preferences</Text>
             </View>
@@ -175,24 +243,28 @@ export function SettingsPanel({ isOpen, onClose, savedItemIds, onToggleSave }: S
                 description="Get notified when you receive a message"
                 value={notifPrefs.new_messages ?? true}
                 onChange={(v) => handleNotifToggle("new_messages", v)}
+                c={c}
               />
               <NotificationToggle
                 label="Price Drops"
                 description="Alert when saved items go on sale"
                 value={notifPrefs.price_drops ?? true}
                 onChange={(v) => handleNotifToggle("price_drops", v)}
+                c={c}
               />
               <NotificationToggle
                 label="New Listings"
                 description="Notify about new items in your categories"
                 value={notifPrefs.new_listings ?? true}
                 onChange={(v) => handleNotifToggle("new_listings", v)}
+                c={c}
               />
               <NotificationToggle
                 label="Item Sold"
                 description="Alert when your listing sells"
                 value={notifPrefs.item_sold ?? true}
                 onChange={(v) => handleNotifToggle("item_sold", v)}
+                c={c}
               />
             </ScrollView>
           </>
@@ -202,7 +274,7 @@ export function SettingsPanel({ isOpen, onClose, savedItemIds, onToggleSave }: S
           <>
             <View style={styles.panelHeader}>
               <TouchableOpacity onPress={() => setViewMode("main")} style={styles.closeBtn}>
-                <X size={22} color="#111827" strokeWidth={1.5} />
+                <X size={22} color={c.textPrimary} strokeWidth={1.5} />
               </TouchableOpacity>
               <Text style={styles.panelTitle}>Saved Listings</Text>
             </View>
@@ -268,12 +340,15 @@ function NotificationToggle({
   description,
   value,
   onChange,
+  c,
 }: {
   label: string;
   description: string;
   value: boolean;
   onChange: (v: boolean) => void;
+  c: any;
 }) {
+  const notifStyles = makeNotifStyles(c);
   return (
     <View style={notifStyles.row}>
       <View style={notifStyles.textBlock}>
@@ -283,7 +358,7 @@ function NotificationToggle({
       <Switch
         value={value}
         onValueChange={onChange}
-        trackColor={{ false: "#D1D5DB", true: "#0064B1" }}
+        trackColor={{ false: "#D1D5DB", true: c.accent }}
         thumbColor="#FFFFFF"
       />
     </View>
@@ -292,10 +367,10 @@ function NotificationToggle({
 
 const ITEM_WIDTH = (width) / 2 - 1;
 
-const styles = StyleSheet.create({
+const makeStyles = (c: any) => StyleSheet.create({
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.4)",
+    backgroundColor: c.overlay,
   },
   panel: {
     position: "absolute",
@@ -303,7 +378,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     width: width,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: c.background,
   },
   panelHeader: {
     flexDirection: "row",
@@ -312,18 +387,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
+    borderBottomColor: c.borderLight,
   },
   panelTitle: {
     fontSize: 18,
-    color: "#111827",
+    color: c.textPrimary,
   },
   closeBtn: {
     padding: 8,
   },
   section: {
     borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
+    borderBottomColor: c.borderLight,
   },
   menuRow: {
     flexDirection: "row",
@@ -344,11 +419,11 @@ const styles = StyleSheet.create({
   },
   menuLabel: {
     fontSize: 14,
-    color: "#111827",
+    color: c.textPrimary,
   },
   menuCount: {
     fontSize: 12,
-    color: "#9CA3AF",
+    color: c.textTertiary,
   },
   sectionHeaderContainer: {
     paddingHorizontal: 16,
@@ -357,7 +432,7 @@ const styles = StyleSheet.create({
   },
   sectionHeader: {
     fontSize: 12,
-    color: "#6B7280",
+    color: c.textSecondary,
     letterSpacing: 0.5,
   },
   notifList: {
@@ -373,7 +448,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
-    color: "#9CA3AF",
+    color: c.textTertiary,
   },
   emptySubtext: {
     fontSize: 12,
@@ -384,11 +459,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 1,
-    backgroundColor: "#F3F4F6",
+    backgroundColor: c.borderLight,
   },
   gridItem: {
     width: ITEM_WIDTH,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: c.background,
   },
   gridImage: {
     width: ITEM_WIDTH,
@@ -412,7 +487,7 @@ const styles = StyleSheet.create({
   },
   gridTitle: {
     fontSize: 14,
-    color: "#111827",
+    color: c.textPrimary,
   },
   gridSeller: {
     flexDirection: "row",
@@ -427,18 +502,18 @@ const styles = StyleSheet.create({
   },
   gridSellerName: {
     fontSize: 11,
-    color: "#9CA3AF",
+    color: c.textTertiary,
   },
 });
 
-const notifStyles = StyleSheet.create({
+const makeNotifStyles = (c: any) => StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "#F9FAFB",
+    borderBottomColor: c.surface,
   },
   textBlock: {
     flex: 1,
@@ -446,11 +521,11 @@ const notifStyles = StyleSheet.create({
   },
   label: {
     fontSize: 14,
-    color: "#111827",
+    color: c.textPrimary,
   },
   desc: {
     fontSize: 12,
-    color: "#9CA3AF",
+    color: c.textTertiary,
     marginTop: 2,
   },
 });

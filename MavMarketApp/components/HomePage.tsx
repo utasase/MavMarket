@@ -13,11 +13,11 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Search, SlidersHorizontal, X, Heart, Menu } from "lucide-react-native";
+import { Search, SlidersHorizontal, X, Heart } from "lucide-react-native";
 import { listings as mockListings, categories, type ListingItem } from "../data/mockData";
 import { MavLogo } from "./MavLogo";
 import { ItemDetail } from "./ItemDetail";
-import { SettingsPanel } from "./SettingsPanel";
+import { HeaderMenu } from "./HeaderMenu";
 import { getListings } from "../lib/listings";
 import { useAuth } from "../lib/auth-context";
 import { getSavedListingIds, saveItem, unsaveItem } from "../lib/saved";
@@ -38,7 +38,6 @@ export function HomePage() {
   const [selectedItem, setSelectedItem] = useState<ListingItem | null>(null);
   const [savedItems, setSavedItems] = useState<string[]>([]);
   const [showSearch, setShowSearch] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   const [allListings, setAllListings] = useState<ListingItem[]>(mockListings);
   const [loadingListings, setLoadingListings] = useState(false);
   const insets = useSafeAreaInsets();
@@ -126,12 +125,7 @@ export function HomePage() {
               strokeWidth={1.5}
             />
           </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setShowSettings(true)}
-            style={styles.iconBtn}
-          >
-            <Menu size={22} color={c.textPrimary} strokeWidth={1.5} />
-          </TouchableOpacity>
+          <HeaderMenu savedItemIds={savedItems} onToggleSave={toggleSave} />
         </View>
       </View>
 
@@ -275,13 +269,6 @@ export function HomePage() {
         </SlideUpOverlay>
       )}
 
-      {/* Settings Panel */}
-      <SettingsPanel
-        isOpen={showSettings}
-        onClose={() => setShowSettings(false)}
-        savedItemIds={savedItems}
-        onToggleSave={toggleSave}
-      />
     </View>
   );
 }

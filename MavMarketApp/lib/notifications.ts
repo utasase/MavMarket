@@ -1,6 +1,26 @@
 import { supabase } from "./supabase";
 import { type Notification } from "../data/mockData";
 
+export async function createNotification(params: {
+  userId: string;
+  type: Notification["type"];
+  title: string;
+  message: string;
+  avatarUrl?: string;
+  itemImage?: string;
+}): Promise<void> {
+  const { error } = await supabase.from("notifications").insert({
+    user_id: params.userId,
+    type: params.type,
+    title: params.title,
+    message: params.message,
+    avatar_url: params.avatarUrl ?? null,
+    item_image: params.itemImage ?? null,
+    read: false,
+  });
+  if (error) throw error;
+}
+
 export async function getNotifications(userId: string): Promise<Notification[]> {
   const { data, error } = await supabase
     .from("notifications")

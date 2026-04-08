@@ -1,5 +1,6 @@
 import { type RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
+import { createNotification } from "./notifications";
 
 export interface DBConversation {
   id: string;
@@ -137,6 +138,28 @@ export async function sendMessage(
     .update({ last_message: text, last_message_time: new Date().toISOString() })
     .eq("id", conversationId);
   if (convError) throw convError;
+
+  // Fire-and-forget: notify the recipient
+  supabase
+    .from("conversations")
+    .select("buyer_id, seller_id, listing:listings(title, image_url), sender:users!inner(name, avatar_url)")
+    .eq("id", conversationId)
+    .single()
+    .then(async ({ data }) => {
+      if (!data) return;
+      const recipientId = data.buyer_id === senderId ? data.seller_id : data.buyer_id;
+      const listing = data.listing as any;
+      const sender = data.sender as any;
+      await createNotification({
+        userId: recipientId,
+        type: "message",
+        title: sender?.name ?? "New message",
+        message: text.length > 80 ? text.slice(0, 80) + "…" : text,
+        avatarUrl: sender?.avatar_url ?? undefined,
+        itemImage: listing?.image_url ?? undefined,
+      });
+    })
+    .catch(() => { /* best-effort — never crash sendMessage */ });
 }
 
 export function subscribeToMessages(

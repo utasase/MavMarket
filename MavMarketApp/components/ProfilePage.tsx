@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { Settings, ArrowLeft, Shield, LayoutGrid, Star } from "lucide-react-native";
+import { ArrowLeft, LayoutGrid, Star } from "lucide-react-native";
 import { currentUser as mockUser, type UserProfile, type ListingItem } from "../data/mockData";
 import { StarRating } from "./StarRating";
 import { ReviewsViewer } from "./ReviewsViewer";
@@ -24,14 +24,128 @@ import { getCurrentUserProfile, getSellerListings, isFollowing, followUser, unfo
 import { deleteListing, markListingAsSold } from "../lib/listings";
 import { isCurrentUserAdmin } from "../lib/moderation";
 import { AdminModerationPanel } from "./AdminModerationPanel";
-import { supabase } from "../lib/supabase";
+import { HeaderMenu } from "./HeaderMenu";
 import { findOrCreateDirectConversation } from "../lib/messages";
 import { getSavedListings } from "../lib/saved";
+import { useTheme } from "../lib/ThemeContext";
 
 const { width } = Dimensions.get("window");
 const GRID_CELL = (width - 2) / 3;
 
+const makeStyles = (c: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: c.background },
+  centered: { flex: 1, justifyContent: "center", alignItems: "center" },
+  profileHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  profileUsername: { fontSize: 18, color: c.textPrimary },
+  settingsBtn: { padding: 4 },
+  profileInfo: { paddingHorizontal: 16, paddingVertical: 12 },
+  profileRow: { flexDirection: "row", alignItems: "center", gap: 20 },
+  profileAvatar: { width: 80, height: 80, borderRadius: 40, flexShrink: 0 },
+  avatarPlaceholder: { backgroundColor: c.border, justifyContent: "center", alignItems: "center" },
+  avatarInitial: { fontSize: 28, color: c.textSecondary },
+  statsRow: { flex: 1, flexDirection: "row", justifyContent: "space-around" },
+  statItem: { alignItems: "center" },
+  statNumber: { fontSize: 18, color: "#0064B1", lineHeight: 22, fontWeight: "700" },
+  statLabel: { fontSize: 11, color: c.textSecondary },
+  bioBlock: { marginTop: 12, gap: 3 },
+  bioName: { fontSize: 14, color: c.textPrimary },
+  bioText: { fontSize: 12, color: c.textSecondary },
+  bioMetaRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  bioMeta: { fontSize: 12, color: c.textTertiary },
+  ratingBtn: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
+  reviewCountText: { fontSize: 11, color: c.textTertiary },
+  editProfileBtn: {
+    marginTop: 12,
+    paddingVertical: 8,
+    backgroundColor: c.surface,
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  editProfileText: { fontSize: 14, color: "#0064B1", fontWeight: "500" },
+  profileTabBar: {
+    flexDirection: "row",
+    borderTopWidth: 1,
+    borderTopColor: c.borderLight,
+    borderBottomWidth: 1,
+    borderBottomColor: c.borderLight,
+  },
+  profileTabBtn: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 10,
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
+  },
+  profileTabBtnActive: { borderBottomColor: "#0064B1" },
+  listingsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 1, backgroundColor: c.borderLight },
+  gridCell: { width: GRID_CELL, height: GRID_CELL, backgroundColor: c.background, position: "relative" },
+  gridImage: { width: GRID_CELL, height: GRID_CELL },
+  gridPriceBadge: {
+    position: "absolute",
+    bottom: 4,
+    left: 4,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  gridPriceText: { color: "#FFFFFF", fontSize: 10 },
+  emptyListings: {
+    width: "100%",
+    padding: 32,
+    alignItems: "center",
+    gap: 6,
+  },
+  emptyListingsText: { fontSize: 14, color: c.textTertiary },
+  emptyListingsSubtext: { fontSize: 12, color: "#D1D5DB", textAlign: "center" },
+  friendProfileHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  backBtn: { padding: 4, marginLeft: -4 },
+  friendActions: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 12,
+  },
+  messageActionBtn: {
+    paddingVertical: 8,
+    backgroundColor: "#0064B1",
+    borderWidth: 1,
+    borderColor: "#0064B1",
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  messageActionBtnText: { fontSize: 14, color: "#FFFFFF", fontWeight: "600" },
+  followingBtn: { backgroundColor: "#EFF6FF", borderColor: "#BFDBFE" },
+  followingBtnText: { color: "#0064B1" },
+  reportActionBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  reportActionBtnText: { fontSize: 14, color: c.textTertiary },
+});
+
 export function ProfilePage() {
+  const { theme } = useTheme();
+  const c = theme.colors;
+  const styles = makeStyles(c);
+
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -153,17 +267,6 @@ export function ProfilePage() {
     ]);
   };
 
-  const handleSignOut = () => {
-    Alert.alert("Sign Out", "Are you sure you want to sign out?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Sign Out",
-        style: "destructive",
-        onPress: () => supabase.auth.signOut(),
-      },
-    ]);
-  };
-
   if (showAdminPanel) {
     return <AdminModerationPanel onBack={() => setShowAdminPanel(false)} />;
   }
@@ -187,17 +290,7 @@ export function ProfilePage() {
         <Text style={styles.profileUsername}>
           {profile.name.split(" ")[0].toLowerCase()}
         </Text>
-        {isAdmin && (
-          <TouchableOpacity
-            onPress={() => setShowAdminPanel(true)}
-            style={[styles.settingsBtn, { marginRight: 8 }]}
-          >
-            <Shield size={20} color="#DC2626" strokeWidth={1.5} />
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity onPress={handleSignOut} style={styles.settingsBtn}>
-          <Settings size={22} color="#111827" strokeWidth={1.5} />
-        </TouchableOpacity>
+        <HeaderMenu isAdmin={isAdmin} onAdminPress={() => setShowAdminPanel(true)} />
       </View>
 
       {loadingProfile ? (
@@ -274,13 +367,13 @@ export function ProfilePage() {
               onPress={() => setProfileTab("listings")}
               style={[styles.profileTabBtn, profileTab === "listings" && styles.profileTabBtnActive]}
             >
-              <LayoutGrid size={20} color={profileTab === "listings" ? "#0064B1" : "#9CA3AF"} strokeWidth={1.5} />
+              <LayoutGrid size={20} color={profileTab === "listings" ? "#0064B1" : c.textTertiary} strokeWidth={1.5} />
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => setProfileTab("starred")}
               style={[styles.profileTabBtn, profileTab === "starred" && styles.profileTabBtnActive]}
             >
-              <Star size={20} color={profileTab === "starred" ? "#0064B1" : "#9CA3AF"} strokeWidth={1.5} />
+              <Star size={20} color={profileTab === "starred" ? "#0064B1" : c.textTertiary} strokeWidth={1.5} />
             </TouchableOpacity>
           </View>
 
@@ -361,6 +454,7 @@ export function ProfilePage() {
           loadProfile();
         }}
       />
+
     </View>
   );
 }
@@ -372,6 +466,10 @@ function FriendProfile({
   profile: UserProfile;
   onBack: () => void;
 }) {
+  const { theme } = useTheme();
+  const c = theme.colors;
+  const styles = makeStyles(c);
+
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const router = useRouter();
@@ -449,7 +547,7 @@ function FriendProfile({
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.friendProfileHeader}>
         <TouchableOpacity onPress={onBack} style={styles.backBtn}>
-          <ArrowLeft size={22} color="#111827" strokeWidth={1.5} />
+          <ArrowLeft size={22} color={c.textPrimary} strokeWidth={1.5} />
         </TouchableOpacity>
         <Text style={styles.profileUsername}>{profile.name.split(" ")[0].toLowerCase()}</Text>
       </View>
@@ -523,7 +621,7 @@ function FriendProfile({
           </View>
         </View>
 
-        <View style={[styles.listingsGrid, { borderTopWidth: 1, borderTopColor: "#F3F4F6" }]}>
+        <View style={[styles.listingsGrid, { borderTopWidth: 1, borderTopColor: c.borderLight }]}>
           {profile.listings.map((item) => (
             <View key={item.id} style={styles.gridCell}>
               <Image source={{ uri: item.image }} style={styles.gridImage} resizeMode="cover" />
@@ -545,112 +643,3 @@ function FriendProfile({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#FFFFFF" },
-  centered: { flex: 1, justifyContent: "center", alignItems: "center" },
-  profileHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  profileUsername: { fontSize: 18, color: "#111827" },
-  settingsBtn: { padding: 4 },
-  profileInfo: { paddingHorizontal: 16, paddingVertical: 12 },
-  profileRow: { flexDirection: "row", alignItems: "center", gap: 20 },
-  profileAvatar: { width: 80, height: 80, borderRadius: 40, flexShrink: 0 },
-  avatarPlaceholder: { backgroundColor: "#E5E7EB", justifyContent: "center", alignItems: "center" },
-  avatarInitial: { fontSize: 28, color: "#6B7280" },
-  statsRow: { flex: 1, flexDirection: "row", justifyContent: "space-around" },
-  statItem: { alignItems: "center" },
-  statNumber: { fontSize: 18, color: "#0064B1", lineHeight: 22, fontWeight: "700" },
-  statLabel: { fontSize: 11, color: "#6B7280" },
-  bioBlock: { marginTop: 12, gap: 3 },
-  bioName: { fontSize: 14, color: "#111827" },
-  bioText: { fontSize: 12, color: "#4B5563" },
-  bioMetaRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  bioMeta: { fontSize: 12, color: "#9CA3AF" },
-  ratingBtn: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
-  reviewCountText: { fontSize: 11, color: "#9CA3AF" },
-  editProfileBtn: {
-    marginTop: 12,
-    paddingVertical: 8,
-    backgroundColor: "#F9FAFB",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  editProfileText: { fontSize: 14, color: "#0064B1", fontWeight: "500" },
-  profileTabBar: {
-    flexDirection: "row",
-    borderTopWidth: 1,
-    borderTopColor: "#F3F4F6",
-    borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
-  },
-  profileTabBtn: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: 10,
-    borderBottomWidth: 2,
-    borderBottomColor: "transparent",
-  },
-  profileTabBtnActive: { borderBottomColor: "#0064B1" },
-  listingsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 1, backgroundColor: "#F3F4F6" },
-  gridCell: { width: GRID_CELL, height: GRID_CELL, backgroundColor: "#FFFFFF", position: "relative" },
-  gridImage: { width: GRID_CELL, height: GRID_CELL },
-  gridPriceBadge: {
-    position: "absolute",
-    bottom: 4,
-    left: 4,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  gridPriceText: { color: "#FFFFFF", fontSize: 10 },
-  emptyListings: {
-    width: "100%",
-    padding: 32,
-    alignItems: "center",
-    gap: 6,
-  },
-  emptyListingsText: { fontSize: 14, color: "#9CA3AF" },
-  emptyListingsSubtext: { fontSize: 12, color: "#D1D5DB", textAlign: "center" },
-  friendProfileHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  backBtn: { padding: 4, marginLeft: -4 },
-  friendActions: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 12,
-  },
-  messageActionBtn: {
-    paddingVertical: 8,
-    backgroundColor: "#0064B1",
-    borderWidth: 1,
-    borderColor: "#0064B1",
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  messageActionBtnText: { fontSize: 14, color: "#FFFFFF", fontWeight: "600" },
-  followingBtn: { backgroundColor: "#EFF6FF", borderColor: "#BFDBFE" },
-  followingBtnText: { color: "#0064B1" },
-  reportActionBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  reportActionBtnText: { fontSize: 14, color: "#9CA3AF" },
-});
