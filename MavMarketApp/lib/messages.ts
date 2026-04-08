@@ -117,27 +117,14 @@ export async function sendMessage(
   senderId: string,
   text: string
 ): Promise<void> {
-  // Rate limit: max 30 messages per 60 seconds
-  const { data: limited } = await supabase.rpc("is_rate_limited", {
-    p_user_id: senderId,
-    p_action: "send_message",
-    p_max_count: 30,
-    p_window_secs: 60,
+  // Server-side RPC keeps rate limiting, message insert, audit log, and
+  // conversation metadata update inside one transaction.
+  const { error } = await supabase.rpc("send_message", {
+    p_conversation_id: conversationId,
+    p_sender_id: senderId,
+    p_text: text,
   });
-  if (limited) throw new Error("You're sending messages too fast. Please slow down.");
-
-  const { error: msgError } = await supabase
-    .from("messages")
-    .insert({ conversation_id: conversationId, sender_id: senderId, text });
-  if (msgError) throw msgError;
-
-  await supabase.from("rate_limit_log").insert({ user_id: senderId, action: "send_message" });
-
-  const { error: convError } = await supabase
-    .from("conversations")
-    .update({ last_message: text, last_message_time: new Date().toISOString() })
-    .eq("id", conversationId);
-  if (convError) throw convError;
+  if (error) throw error;
 
   // Fire-and-forget: notify the recipient
   supabase

@@ -10,6 +10,7 @@ jest.mock('../../lib/supabase', () => {
 import {
   getCurrentUserProfile,
   getSellerListings,
+  getPublicSellerListings,
   updateUserProfile,
   getNotificationPreferences,
   updateNotificationPreferences,
@@ -83,6 +84,12 @@ describe('getSellerListings', () => {
     expect(result[0].title).toBe('Used Textbook');
   });
 
+  it('does not apply a public status filter for owner listings', async () => {
+    mock.mockResolve(OK([makeListingRow({ status: 'draft' })]));
+    await getSellerListings('user-1');
+    expect(mock.builder.calls.some((c) => c.method === 'in' && c.args[0] === 'status')).toBe(false);
+  });
+
   it('returns [] when data is null', async () => {
     mock.mockResolve({ data: null, error: null });
     expect(await getSellerListings('user-1')).toEqual([]);
@@ -94,16 +101,41 @@ describe('getSellerListings', () => {
     expect(result[0].sellerName).toBe('Unknown');
   });
 
-  it('maps isSold from status column: status "sold" → isSold true', async () => {
+  it('maps isSold from status column: status "sold" to isSold true', async () => {
     mock.mockResolve(OK([makeListingRow({ status: 'sold' })]));
     const result = await getSellerListings('user-1');
     expect(result[0].isSold).toBe(true);
   });
 
-  it('maps isSold from status column: status "active" → isSold false', async () => {
+  it('maps isSold from status column: status "active" to isSold false', async () => {
     mock.mockResolve(OK([makeListingRow({ status: 'active' })]));
     const result = await getSellerListings('user-1');
     expect(result[0].isSold).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getPublicSellerListings
+// ---------------------------------------------------------------------------
+describe('getPublicSellerListings', () => {
+  it('filters public profile listings to active status only', async () => {
+    mock.mockResolve(OK([makeListingRow({ status: 'active' })]));
+    const result = await getPublicSellerListings('user-2');
+
+    expect(result).toHaveLength(1);
+    const statusFilterCall = mock.builder.calls.find((c) => c.method === 'in' && c.args[0] === 'status');
+    expect(statusFilterCall?.args).toEqual(['status', ['active']]);
+  });
+
+  it('returns [] when data is null', async () => {
+    mock.mockResolve({ data: null, error: null });
+    expect(await getPublicSellerListings('user-2')).toEqual([]);
+  });
+
+  it('defaults sellerName to "Unknown" when seller join is null', async () => {
+    mock.mockResolve(OK([makeListingRow({ seller: null })]));
+    const result = await getPublicSellerListings('user-2');
+    expect(result[0].sellerName).toBe('Unknown');
   });
 });
 

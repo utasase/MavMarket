@@ -18,7 +18,7 @@ import {
 
 beforeEach(() => mock.reset());
 
-const BUYER_ID  = 'buyer-1';
+const BUYER_ID = 'buyer-1';
 const SELLER_ID = 'seller-1';
 
 // getConversations uses Promise.all([convQuery, readsQuery])
@@ -32,22 +32,21 @@ function mockConvQueries(convRows: any[], reads: any[]) {
 // getConversations
 // ---------------------------------------------------------------------------
 describe('getConversations', () => {
-  it('returns conversation where user is buyer — contactName is seller', async () => {
+  it('returns conversation where user is buyer - contactName is seller', async () => {
     mockConvQueries([makeConvRow(BUYER_ID)], []);
     const result = await getConversations(BUYER_ID);
     expect(result).toHaveLength(1);
-    expect(result[0].contactName).toBe('Bob');   // seller
+    expect(result[0].contactName).toBe('Bob');
     expect(result[0].contactId).toBe(SELLER_ID);
     expect(result[0].itemTitle).toBe('Used Textbook');
   });
 
-  it('returns conversation where user is seller — contactName is buyer', async () => {
+  it('returns conversation where user is seller - contactName is buyer', async () => {
     const row = makeConvRow(BUYER_ID, { seller_id: BUYER_ID, buyer_id: 'other-buyer' });
-    // rewrite so userId === seller_id
     const sellerUserId = BUYER_ID;
     mockConvQueries([{ ...row, seller_id: sellerUserId }], []);
     const result = await getConversations(sellerUserId);
-    expect(result[0].contactName).toBe('Alice'); // buyer
+    expect(result[0].contactName).toBe('Alice');
   });
 
   it('returns [] when conversation data is null', async () => {
@@ -57,14 +56,14 @@ describe('getConversations', () => {
   });
 
   it('sets unread to 1 when no message_reads row exists for this conversation', async () => {
-    mockConvQueries([makeConvRow(BUYER_ID)], []); // empty reads — no row for conv-1
+    mockConvQueries([makeConvRow(BUYER_ID)], []);
     const result = await getConversations(BUYER_ID);
     expect(result[0].unread).toBe(1);
   });
 
   it('sets unread to 1 when last_read_at is before last_message_time', async () => {
     const lastMsg = new Date().toISOString();
-    const lastRead = new Date(Date.now() - 60_000).toISOString(); // 1 min before
+    const lastRead = new Date(Date.now() - 60_000).toISOString();
     mockConvQueries(
       [makeConvRow(BUYER_ID, { last_message_time: lastMsg })],
       [{ conversation_id: 'conv-1', last_read_at: lastRead }]
@@ -74,8 +73,8 @@ describe('getConversations', () => {
   });
 
   it('sets unread to 0 when last_read_at >= last_message_time', async () => {
-    const lastMsg  = new Date(Date.now() - 60_000).toISOString();
-    const lastRead = new Date().toISOString(); // 1 min after
+    const lastMsg = new Date(Date.now() - 60_000).toISOString();
+    const lastRead = new Date().toISOString();
     mockConvQueries(
       [makeConvRow(BUYER_ID, { last_message_time: lastMsg })],
       [{ conversation_id: 'conv-1', last_read_at: lastRead }]
@@ -104,12 +103,12 @@ describe('markConversationRead', () => {
   it('calls upsert with correct user_id, conversation_id, and onConflict', async () => {
     mock.mockResolve({ data: null, error: null });
     await expect(markConversationRead('user-1', 'conv-1')).resolves.toBeUndefined();
-    const upsertCall = mock.builder.calls.find(c => c.method === 'upsert');
+    const upsertCall = mock.builder.calls.find((c) => c.method === 'upsert');
     expect(upsertCall?.args[0]).toMatchObject({ user_id: 'user-1', conversation_id: 'conv-1' });
     expect(upsertCall?.args[1]).toMatchObject({ onConflict: 'user_id,conversation_id' });
   });
 
-  // Known gap: markConversationRead does not check the error — it's fire-and-forget
+  // Known gap: markConversationRead does not check the error - it is fire-and-forget.
   it('[known gap] silently swallows supabase errors (fire-and-forget design)', async () => {
     mock.mockResolve(ERR('network error'));
     await expect(markConversationRead('user-1', 'conv-1')).resolves.toBeUndefined();
@@ -145,44 +144,36 @@ describe('getMessages', () => {
 // ---------------------------------------------------------------------------
 describe('sendMessage', () => {
   it('throws when rate limited', async () => {
-    mock.mockResolveOnce(OK(true)); // rate limited
+    mock.mockResolveOnce(ERR("You're sending messages too fast. Please slow down."));
     await expect(sendMessage('conv-1', 'user-1', 'Hi')).rejects.toThrow("You're sending messages too fast. Please slow down.");
     const rpcCalls = (mock.client.rpc as jest.Mock).mock.calls;
     expect(rpcCalls).toHaveLength(1);
-    expect(rpcCalls[0][0]).toBe('is_rate_limited');
-    expect((mock.client.from as jest.Mock).mock.calls).toHaveLength(0); // no writes
+    expect(rpcCalls[0][0]).toBe('send_message');
+    expect((mock.client.from as jest.Mock).mock.calls).toHaveLength(0);
   });
 
-  it('inserts message then rate_limit_log then updates conversation last_message (3 DB calls after RPC)', async () => {
-    mock.mockResolveOnce(OK(false)); // not rate limited
-    mock.mockResolveOnce({ data: null, error: null }); // messages insert
-    mock.mockResolveOnce({ data: null, error: null }); // rate_limit_log insert
-    mock.mockResolveOnce({ data: null, error: null }); // conversations update
+  it('delegates the whole send flow to a single atomic RPC', async () => {
+    mock.mockResolveOnce(OK(null));
     await expect(sendMessage('conv-1', 'user-1', 'Hi')).resolves.toBeUndefined();
-    const fromCalls = (mock.client.from as jest.Mock).mock.calls.map((c: any[]) => c[0]);
-    expect(fromCalls).toContain('messages');
-    expect(fromCalls).toContain('rate_limit_log');
-    expect(fromCalls).toContain('conversations');
+    expect(mock.client.rpc).toHaveBeenCalledWith('send_message', {
+      p_conversation_id: 'conv-1',
+      p_sender_id: 'user-1',
+      p_text: 'Hi',
+    });
+    expect((mock.client.from as jest.Mock).mock.calls).toHaveLength(0);
   });
 
-  it('throws on message insert error and does NOT call subsequent updates', async () => {
-    mock.mockResolveOnce(OK(false)); // not rate limited
-    mock.mockResolveOnce(ERR('insert failed')); // messages insert
+  it('propagates RPC failures instead of hiding them', async () => {
+    mock.mockResolveOnce(ERR('insert failed'));
     await expect(sendMessage('conv-1', 'user-1', 'Hi')).rejects.toMatchObject({ message: 'insert failed' });
-    // Only one from() call — conversations was never reached
-    expect((mock.client.from as jest.Mock).mock.calls).toHaveLength(1);
-    expect((mock.client.from as jest.Mock).mock.calls[0][0]).toBe('messages');
+    expect((mock.client.from as jest.Mock).mock.calls).toHaveLength(0);
   });
 
-  // Known gap: non-transactional — message is in DB but conversation last_message is stale
-  it('[known gap] throws on conversation update error after message was already written', async () => {
-    mock.mockResolveOnce(OK(false)); // not rate limited
-    mock.mockResolveOnce({ data: null, error: null }); // message insert succeeds
-    mock.mockResolveOnce({ data: null, error: null }); // rate_limit_log succeeds
-    mock.mockResolveOnce(ERR('update failed'));        // conv update fails
+  it('surfaces a downstream server failure through the single RPC boundary', async () => {
+    mock.mockResolveOnce(ERR('update failed'));
     await expect(sendMessage('conv-1', 'user-1', 'Hi')).rejects.toMatchObject({ message: 'update failed' });
-    // Three from() calls were made
-    expect((mock.client.from as jest.Mock).mock.calls).toHaveLength(3);
+    expect((mock.client.from as jest.Mock).mock.calls).toHaveLength(0);
+    expect((mock.client.rpc as jest.Mock).mock.calls).toHaveLength(1);
   });
 });
 
@@ -227,7 +218,7 @@ describe('createConversation', () => {
     mock.mockResolve(OK({ id: 'conv-new' }));
     const id = await createConversation('listing-1', BUYER_ID, SELLER_ID);
     expect(id).toBe('conv-new');
-    const upsertCall = mock.builder.calls.find(c => c.method === 'upsert');
+    const upsertCall = mock.builder.calls.find((c) => c.method === 'upsert');
     expect(upsertCall?.args[0]).toMatchObject({
       listing_id: 'listing-1',
       buyer_id: BUYER_ID,

@@ -40,76 +40,76 @@ describe('createReport', () => {
 
   it('throws when rate limited', async () => {
     mock.mockAuthUser({ id: 'user-1' });
-    mock.mockResolveOnce(OK(true)); // rate limited
+    mock.mockResolveOnce(ERR("You've submitted too many reports recently. Please wait and try again."));
     await expect(createReport(params)).rejects.toThrow("You've submitted too many reports recently. Please wait and try again.");
     const rpcCalls = (mock.client.rpc as jest.Mock).mock.calls;
     expect(rpcCalls).toHaveLength(1);
-    expect(rpcCalls[0][0]).toBe('is_rate_limited');
+    expect(rpcCalls[0][0]).toBe('create_report');
     expect((mock.client.from as jest.Mock).mock.calls).toHaveLength(0);
   });
 
-  it('inserts report with all required fields for authenticated user', async () => {
+  it('delegates successful report creation to a single transactional RPC', async () => {
     mock.mockAuthUser({ id: 'user-1' });
-    mock.mockResolveOnce(OK(false)); // not rate limited
-    mock.mockResolveOnce({ data: null, error: null }); // rate_limit_log insert
-    mock.mockResolveOnce({ data: null, error: null }); // reports insert
+    mock.mockResolveOnce(OK(null));
     await expect(createReport(params)).resolves.toBeUndefined();
-    
-    const insertCall = mock.builder.calls.find(c => c.method === 'insert' && c.args[0].target_type);
-    expect(insertCall?.args[0]).toMatchObject({
-      reporter_id: 'user-1',
-      target_type: 'listing',
-      target_id: 'listing-1',
-      reason: 'Spam or misleading',
+    expect(mock.client.rpc).toHaveBeenCalledWith('create_report', {
+      p_target_type: 'listing',
+      p_target_id: 'listing-1',
+      p_reason: 'Spam or misleading',
+      p_note: null,
     });
+    expect((mock.client.from as jest.Mock).mock.calls).toHaveLength(0);
   });
 
   it('stores null note when note is not provided', async () => {
     mock.mockAuthUser({ id: 'user-1' });
-    mock.mockResolveOnce(OK(false)); // not rate limited
-    mock.mockResolveOnce({ data: null, error: null }); // rate_limit_log
-    mock.mockResolveOnce({ data: null, error: null }); // reports
+    mock.mockResolveOnce(OK(null));
     await createReport(params);
-    const insertCall = mock.builder.calls.find(c => c.method === 'insert' && c.args[0].target_type);
-    expect(insertCall?.args[0].note).toBeNull();
+    expect(mock.client.rpc).toHaveBeenCalledWith('create_report', expect.objectContaining({
+      p_note: null,
+    }));
   });
 
   it('stores the note string when provided', async () => {
     mock.mockAuthUser({ id: 'user-1' });
-    mock.mockResolveOnce(OK(false)); // not rate limited
-    mock.mockResolveOnce({ data: null, error: null }); // rate_limit_log
-    mock.mockResolveOnce({ data: null, error: null }); // reports
+    mock.mockResolveOnce(OK(null));
     await createReport({ ...params, note: 'This is clearly spam' });
-    const insertCall = mock.builder.calls.find(c => c.method === 'insert' && c.args[0].target_type);
-    expect(insertCall?.args[0].note).toBe('This is clearly spam');
+    expect(mock.client.rpc).toHaveBeenCalledWith('create_report', expect.objectContaining({
+      p_note: 'This is clearly spam',
+    }));
   });
 
-  it('throws on FK constraint violation (target does not exist)', async () => {
+  it('propagates database failures instead of hiding them', async () => {
     mock.mockAuthUser({ id: 'user-1' });
-    mock.mockResolveOnce(OK(false)); // not rate limited
-    mock.mockResolveOnce({ data: null, error: null }); // rate_limit_log
-    mock.mockResolveOnce(ERR('violates foreign key constraint', '23503')); // reports
-    await expect(createReport(params)).rejects.toBeDefined();
+    mock.mockResolveOnce(ERR('violates foreign key constraint', '23503'));
+    await expect(createReport(params)).rejects.toMatchObject({ message: 'violates foreign key constraint', code: '23503' });
+    expect((mock.client.from as jest.Mock).mock.calls).toHaveLength(0);
   });
 
   it('handles target_type "listing"', async () => {
     mock.mockAuthUser({ id: 'user-1' });
-    mock.mockResolveOnce(OK(false));
-    mock.mockResolveOnce({ data: null, error: null });
-    mock.mockResolveOnce({ data: null, error: null });
+    mock.mockResolveOnce(OK(null));
     await createReport({ ...params, targetType: 'listing' });
-    const insertCall = mock.builder.calls.find(c => c.method === 'insert' && c.args[0].target_type);
-    expect(insertCall?.args[0].target_type).toBe('listing');
+    expect(mock.client.rpc).toHaveBeenCalledWith('create_report', expect.objectContaining({
+      p_target_type: 'listing',
+    }));
   });
 
   it('handles target_type "user"', async () => {
     mock.mockAuthUser({ id: 'user-1' });
-    mock.mockResolveOnce(OK(false));
-    mock.mockResolveOnce({ data: null, error: null });
-    mock.mockResolveOnce({ data: null, error: null });
+    mock.mockResolveOnce(OK(null));
     await createReport({ ...params, targetType: 'user', targetId: 'user-99' });
-    const insertCall = mock.builder.calls.find(c => c.method === 'insert' && c.args[0].target_type);
-    expect(insertCall?.args[0].target_type).toBe('user');
-    expect(insertCall?.args[0].target_id).toBe('user-99');
+    expect(mock.client.rpc).toHaveBeenCalledWith('create_report', expect.objectContaining({
+      p_target_type: 'user',
+      p_target_id: 'user-99',
+    }));
+  });
+
+  it('surfaces a downstream server failure through the single RPC boundary', async () => {
+    mock.mockAuthUser({ id: 'user-1' });
+    mock.mockResolveOnce(ERR('rate limit log insert failed'));
+    await expect(createReport(params)).rejects.toMatchObject({ message: 'rate limit log insert failed' });
+    expect((mock.client.from as jest.Mock).mock.calls).toHaveLength(0);
+    expect((mock.client.rpc as jest.Mock).mock.calls).toHaveLength(1);
   });
 });
