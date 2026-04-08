@@ -109,6 +109,7 @@ export function createSupabaseMock() {
   const client = {
     from:    jest.fn((_t: string) => builder),
     channel: jest.fn((_n: string) => channel),
+    rpc:     jest.fn((_fn: string, _args: any) => builder),
     auth,
   };
 
@@ -134,8 +135,5 @@ export function createSupabaseMock() {
       (client.channel as jest.Mock).mockClear();
       (client.rpc     as jest.Mock).mockClear();
     },
-  };
-}
- },
   };
 }

@@ -1,7 +1,12 @@
 import { supabase } from "./supabase";
-import { Linking, Alert } from "react-native";
+import { Alert, Linking } from "react-native";
 
 const PLATFORM_FEE_PERCENT = 0.05; // 5%
+
+export type BuyNowResult =
+  | { status: "cancelled" }
+  | { status: "opened"; sessionId: string | null }
+  | { status: "failed"; error: Error };
 
 export interface Payment {
   id: string;
@@ -43,7 +48,7 @@ export function calculateTotal(price: number): number {
 
 /**
  * Create a Stripe Checkout Session for a listing and open it in the browser.
- * Returns the session ID, or null if the user cancelled / an error occurred.
+ * Returns the session ID after the checkout page opens.
  */
 export async function createCheckoutSession(listingId: string): Promise<string | null> {
   const { data, error } = await supabase.functions.invoke("create-checkout-session", {
@@ -70,47 +75,60 @@ export async function createCheckoutSession(listingId: string): Promise<string |
   return data.session_id;
 }
 
+function toPaymentError(error: unknown): Error {
+  if (error instanceof Error) return error;
+  if (typeof error === "string" && error.trim()) return new Error(error);
+  return new Error("Payment failed");
+}
+
 /**
  * Initiate a buy-now flow with user confirmation.
- * Shows an alert with price breakdown, then opens Stripe Checkout.
+ * Shows an alert with price breakdown, then resolves with the checkout outcome.
  */
 export function buyNow(
   listingId: string,
   itemTitle: string,
-  price: number,
-  onSuccess?: () => void,
-  onError?: (error: string) => void
-): void {
+  price: number
+): Promise<BuyNowResult> {
   const fee = calculateServiceFee(price);
   const total = calculateTotal(price);
 
-  Alert.alert(
-    "Confirm Purchase",
-    `${itemTitle}\n\nItem price: $${price.toFixed(2)}\nService fee (5%): $${fee.toFixed(2)}\n──────────\nTotal: $${total.toFixed(2)}`,
-    [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Buy Now",
-        onPress: async () => {
-          try {
-            await createCheckoutSession(listingId);
-            onSuccess?.();
-          } catch (err: any) {
-            const msg = err.message || "Payment failed";
-            Alert.alert("Payment Error", msg);
-            onError?.(msg);
-          }
+  return new Promise((resolve) => {
+    Alert.alert(
+      "Confirm Purchase",
+      `${itemTitle}\n\nItem price: $${price.toFixed(2)}\nService fee (5%): $${fee.toFixed(2)}\n----------\nTotal: $${total.toFixed(2)}`,
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+          onPress: () => resolve({ status: "cancelled" }),
         },
-      },
-    ]
-  );
+        {
+          text: "Buy Now",
+          onPress: async () => {
+            try {
+              const sessionId = await createCheckoutSession(listingId);
+              resolve({ status: "opened", sessionId });
+            } catch (error) {
+              const paymentError = toPaymentError(error);
+              console.error("Buy flow failed:", paymentError);
+              Alert.alert("Payment Error", paymentError.message);
+              resolve({ status: "failed", error: paymentError });
+            }
+          },
+        },
+      ]
+    );
+  });
 }
 
 /**
  * Fetch payment history for the logged-in user (as buyer or seller).
  */
 export async function getMyPayments(): Promise<Payment[]> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) return [];
 
   const { data, error } = await supabase

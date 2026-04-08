@@ -25,7 +25,7 @@ import { createConversation } from "../lib/messages";
 import { getReviews, createReview, hasReviewed, type Review } from "../lib/reviews";
 import { createReport, REPORT_REASONS } from "../lib/reports";
 import { useTheme } from "../lib/ThemeContext";
-import { buyNow, calculateServiceFee, calculateTotal } from "../lib/payments";
+import { buyNow, calculateTotal } from "../lib/payments";
 
 const { width } = Dimensions.get("window");
 
@@ -76,9 +76,9 @@ export function ItemDetail({ item, onBack, isSaved, onToggleSave }: ItemDetailPr
     if (!canMessage || !user || !item.sellerId) return;
     setMessagingLoading(true);
     try {
-      await createConversation(item.id, user.id, item.sellerId);
+      const conversationId = await createConversation(item.id, user.id, item.sellerId);
       onBack();
-      router.push("/(tabs)/messages");
+      router.push(`/(tabs)/messages?conversationId=${conversationId}` as any);
     } catch (err) {
       console.error("Failed to create conversation:", err);
     } finally {
@@ -86,16 +86,14 @@ export function ItemDetail({ item, onBack, isSaved, onToggleSave }: ItemDetailPr
     }
   };
 
-  const handleBuyNow = () => {
+  const handleBuyNow = async () => {
     if (!canBuy || !user) return;
     setBuyingLoading(true);
-    buyNow(
-      item.id,
-      item.title,
-      item.price,
-      () => setBuyingLoading(false),
-      () => setBuyingLoading(false)
-    );
+    try {
+      await buyNow(item.id, item.title, item.price);
+    } finally {
+      setBuyingLoading(false);
+    }
   };
 
   const handleReport = () => {

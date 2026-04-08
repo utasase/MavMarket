@@ -144,29 +144,45 @@ describe('getMessages', () => {
 // sendMessage
 // ---------------------------------------------------------------------------
 describe('sendMessage', () => {
-  it('inserts message then updates conversation last_message (2 DB calls)', async () => {
+  it('throws when rate limited', async () => {
+    mock.mockResolveOnce(OK(true)); // rate limited
+    await expect(sendMessage('conv-1', 'user-1', 'Hi')).rejects.toThrow("You're sending messages too fast. Please slow down.");
+    const rpcCalls = (mock.client.rpc as jest.Mock).mock.calls;
+    expect(rpcCalls).toHaveLength(1);
+    expect(rpcCalls[0][0]).toBe('is_rate_limited');
+    expect((mock.client.from as jest.Mock).mock.calls).toHaveLength(0); // no writes
+  });
+
+  it('inserts message then rate_limit_log then updates conversation last_message (3 DB calls after RPC)', async () => {
+    mock.mockResolveOnce(OK(false)); // not rate limited
     mock.mockResolveOnce({ data: null, error: null }); // messages insert
+    mock.mockResolveOnce({ data: null, error: null }); // rate_limit_log insert
     mock.mockResolveOnce({ data: null, error: null }); // conversations update
     await expect(sendMessage('conv-1', 'user-1', 'Hi')).resolves.toBeUndefined();
     const fromCalls = (mock.client.from as jest.Mock).mock.calls.map((c: any[]) => c[0]);
     expect(fromCalls).toContain('messages');
+    expect(fromCalls).toContain('rate_limit_log');
     expect(fromCalls).toContain('conversations');
   });
 
-  it('throws on message insert error and does NOT call conversations update', async () => {
-    mock.mockResolveOnce(ERR('insert failed'));
+  it('throws on message insert error and does NOT call subsequent updates', async () => {
+    mock.mockResolveOnce(OK(false)); // not rate limited
+    mock.mockResolveOnce(ERR('insert failed')); // messages insert
     await expect(sendMessage('conv-1', 'user-1', 'Hi')).rejects.toMatchObject({ message: 'insert failed' });
     // Only one from() call — conversations was never reached
     expect((mock.client.from as jest.Mock).mock.calls).toHaveLength(1);
+    expect((mock.client.from as jest.Mock).mock.calls[0][0]).toBe('messages');
   });
 
   // Known gap: non-transactional — message is in DB but conversation last_message is stale
   it('[known gap] throws on conversation update error after message was already written', async () => {
+    mock.mockResolveOnce(OK(false)); // not rate limited
     mock.mockResolveOnce({ data: null, error: null }); // message insert succeeds
-    mock.mockResolveOnce(ERR('update failed'));           // conv update fails
+    mock.mockResolveOnce({ data: null, error: null }); // rate_limit_log succeeds
+    mock.mockResolveOnce(ERR('update failed'));        // conv update fails
     await expect(sendMessage('conv-1', 'user-1', 'Hi')).rejects.toMatchObject({ message: 'update failed' });
-    // Both from() calls were made — message is in DB but last_message not updated
-    expect((mock.client.from as jest.Mock).mock.calls).toHaveLength(2);
+    // Three from() calls were made
+    expect((mock.client.from as jest.Mock).mock.calls).toHaveLength(3);
   });
 });
 
