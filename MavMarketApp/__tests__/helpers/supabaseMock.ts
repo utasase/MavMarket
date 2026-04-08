@@ -132,6 +132,10 @@ export function createSupabaseMock() {
       auth._setUser(null);
       (client.from    as jest.Mock).mockClear();
       (client.channel as jest.Mock).mockClear();
+      (client.rpc     as jest.Mock).mockClear();
     },
+  };
+}
+ },
   };
 }
