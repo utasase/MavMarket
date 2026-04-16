@@ -51,8 +51,8 @@ Tabs are defined in `app/(tabs)/_layout.tsx`:
 - `messages`
 - `profile`
 
-## Contributor notes
+## Contributor Notes
 
 - Route edits should happen in `app/`, not `App.tsx`.
-- Keep behavior aligned with the web implementation in `mav_market_ui_files`.
-- If data shape changes, update `data/mockData.ts` and mirror in web `src/app/data/mockData.ts`.
+- All features should be verified with the shared Supabase backend or mock data.
+- If data shape changes, update `data/mockData.ts` and ensure consistency with the backend schema.

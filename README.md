@@ -1,15 +1,16 @@
-# RigProject
+# MavMarket
 
-RigProject contains two parallel implementations of **Mav Market** (UTA student marketplace):
+**MavMarket** is a university-focused marketplace (specifically for UTA students) that allows students to buy and sell items within their community.
 
-- `MavMarketApp/` -> Expo + React Native app (primary mobile target)
-- `mav_market_ui_files/` -> Vite + React web implementation (UI reference/prototype)
+The project consists of three primary components:
 
-This documentation set is intentionally "pseudo documentation": practical onboarding and maintenance notes for future contributors.
+- **Mobile App (`MavMarketApp/`)**: A cross-platform mobile application built with **React Native (Expo)**, **Expo Router**, and **Supabase**. It handles the core user experience: browsing, messaging, and purchasing.
+- **Admin Console (`ops-admin/`)**: A web-based dashboard for moderation and platform management. Built with **Next.js 16**, **React 19**, and **Tailwind CSS 4**.
+- **Backend (`supabase/`)**: A **Supabase** backend providing Postgres database, Authentication, Storage, and Edge Functions (for Stripe payments).
 
-## Quick start
+## Quick Start
 
-### Mobile app (`MavMarketApp`)
+### Mobile App (`MavMarketApp`)
 
 ```bash
 cd MavMarketApp
@@ -17,69 +18,25 @@ npm install
 npm run start
 ```
 
-Optional platform launch:
+### Admin Console (`ops-admin`)
 
 ```bash
-npm run ios
-npm run android
-npm run web
-```
-
-### Web app (`mav_market_ui_files`)
-
-```bash
-cd mav_market_ui_files
+cd ops-admin
 npm install
 npm run dev
 ```
 
-Production build:
-
-```bash
-npm run build
-```
-
-## Project layout
+## Project Layout
 
 ```text
 RigProject/
-  MavMarketApp/           Expo Router + React Native app
-  mav_market_ui_files/    Vite + React web app
-  .github/                Copilot repo instructions
+├── MavMarketApp/       # React Native / Expo Mobile App
+├── ops-admin/          # Next.js Admin Dashboard
+└── supabase/           # Shared backend resources (Migrations, Functions)
 ```
 
-## Feature model (both targets)
+## Documentation Index
 
-- App flow: splash -> login -> tab app
-- Tabs: Home, Discover/Swipe, Messages, Profile
-- Overlay surfaces: `ItemDetail`, `SettingsPanel`, `ReviewsViewer`
-- Shared domain types: `ListingItem`, `Conversation`, `UserProfile`, `Notification`
-
-## Documentation index
-
-- [`AXON_GRAPH.md`](AXON_GRAPH.md)
-
-### Mobile (`MavMarketApp`)
-
-- [`MavMarketApp/README.md`](MavMarketApp/README.md)
-- [`MavMarketApp/app/README.md`](MavMarketApp/app/README.md)
-- [`MavMarketApp/app/(tabs)/README.md`](MavMarketApp/app/(tabs)/README.md)
-- [`MavMarketApp/components/README.md`](MavMarketApp/components/README.md)
-- [`MavMarketApp/data/README.md`](MavMarketApp/data/README.md)
-- [`MavMarketApp/assets/README.md`](MavMarketApp/assets/README.md)
-
-### Web (`mav_market_ui_files`)
-
-- [`mav_market_ui_files/README.md`](mav_market_ui_files/README.md)
-- [`mav_market_ui_files/src/README.md`](mav_market_ui_files/src/README.md)
-- [`mav_market_ui_files/src/app/README.md`](mav_market_ui_files/src/app/README.md)
-- [`mav_market_ui_files/src/app/components/README.md`](mav_market_ui_files/src/app/components/README.md)
-- [`mav_market_ui_files/src/app/components/ui/README.md`](mav_market_ui_files/src/app/components/ui/README.md)
-- [`mav_market_ui_files/src/app/data/README.md`](mav_market_ui_files/src/app/data/README.md)
-- [`mav_market_ui_files/src/styles/README.md`](mav_market_ui_files/src/styles/README.md)
-- [`mav_market_ui_files/src/imports/README.md`](mav_market_ui_files/src/imports/README.md)
-- [`mav_market_ui_files/guidelines/README.md`](mav_market_ui_files/guidelines/README.md)
-
-### Extra reference surface
-
-- [`mav_market_ui_files/expo-project/README.md`](mav_market_ui_files/expo-project/README.md)
+- [`GEMINI.md`](GEMINI.md): Comprehensive project overview and architecture.
+- [`MavMarketApp/README.md`](MavMarketApp/README.md): Mobile app specific details.
+- [`ops-admin/README.md`](ops-admin/README.md): Admin console specific details.

@@ -1,5 +1,6 @@
 import React from 'react';
 import * as TestRenderer from 'react-test-renderer';
+import { Text } from 'react-native';
 
 import { type ListingItem, type UserProfile, listings as mockListings } from '../../data/mockData';
 
@@ -7,7 +8,13 @@ const { act } = TestRenderer;
 
 const mockReplace = jest.fn();
 let mockRouteUserId: string | undefined;
-let mockAuthUser: { id: string } | null = { id: 'user-1' };
+let mockAuthUser:
+  | { id: string; email?: string; user_metadata?: Record<string, unknown> }
+  | null = {
+    id: 'user-1',
+    email: 'alice@mavs.uta.edu',
+    user_metadata: { name: 'Alice Auth' },
+  };
 
 const mockGetCurrentUserProfile = jest.fn();
 const mockGetSellerListings = jest.fn();
@@ -99,6 +106,17 @@ jest.mock('../../components/AdminModerationPanel', () => ({
   AdminModerationPanel: () => null,
 }));
 
+jest.mock('../../components/HeaderMenu', () => ({
+  HeaderMenu: () => null,
+}));
+
+jest.mock('../../lib/ThemeContext', () => {
+  const { darkTheme } = require('../../lib/theme');
+  return {
+    useTheme: () => ({ theme: darkTheme, isDark: true, toggleTheme: jest.fn() }),
+  };
+});
+
 import { ProfilePage } from '../../components/ProfilePage';
 
 const ownerProfile = makeProfile('user-1', 'Alice');
@@ -140,12 +158,26 @@ async function renderProfilePage() {
   return renderer;
 }
 
+function flattenText(children: React.ReactNode): string {
+  if (Array.isArray(children)) return children.map(flattenText).join('');
+  if (typeof children === 'string' || typeof children === 'number') return String(children);
+  return '';
+}
+
+function getAllText(renderer: TestRenderer.ReactTestRenderer): string {
+  return renderer.root.findAllByType(Text).map((node) => flattenText(node.props.children)).join(' ');
+}
+
 describe('ProfilePage listing visibility paths', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockReplace.mockReset();
     mockRouteUserId = undefined;
-    mockAuthUser = { id: 'user-1' };
+    mockAuthUser = {
+      id: 'user-1',
+      email: 'alice@mavs.uta.edu',
+      user_metadata: { name: 'Alice Auth' },
+    };
     mockGetCurrentUserProfile.mockImplementation(async (userId: string) =>
       userId === 'seller-2' ? publicProfile : ownerProfile,
     );
@@ -176,5 +208,18 @@ describe('ProfilePage listing visibility paths', () => {
 
     expect(mockGetSellerListings).toHaveBeenCalledWith('user-1');
     expect(mockGetPublicSellerListings).not.toHaveBeenCalled();
+  });
+
+  it('falls back to authenticated user data instead of the mock Jordan profile on load failure', async () => {
+    mockGetCurrentUserProfile.mockRejectedValue(new Error('profile failed'));
+    mockGetSellerListings.mockRejectedValue(new Error('listings failed'));
+    mockGetReviews.mockRejectedValue(new Error('reviews failed'));
+
+    const renderer = await renderProfilePage();
+    const text = getAllText(renderer);
+
+    expect(text).toContain('Alice Auth');
+    expect(text).toContain('We could not load your full profile.');
+    expect(text).not.toContain('Jordan Rivera');
   });
 });

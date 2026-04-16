@@ -78,22 +78,25 @@ export function LoginPage() {
     setError("");
     setSuccess("");
 
-    if (!email.trim()) { setError("Please enter your email"); return; }
-    if (!validateEmail(email)) { setError("Please use your UTA email (@mavs.uta.edu)"); return; }
+    const normalizedEmail = email.trim().toLowerCase();
+    const trimmedName = name.trim();
+
+    if (!normalizedEmail) { setError("Please enter your email"); return; }
+    if (!validateEmail(normalizedEmail)) { setError("Please use your UTA email (@mavs.uta.edu)"); return; }
     if (!password.trim() || password.length < 6) { setError("Password must be at least 6 characters"); return; }
-    if (mode === "signup" && !name.trim()) { setError("Please enter your name"); return; }
+    if (mode === "signup" && !trimmedName) { setError("Please enter your name"); return; }
 
     setLoading(true);
     try {
       if (mode === "login") {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
         if (error) throw error;
         // Auth state change in AuthProvider handles navigation automatically
       } else {
         const { error } = await supabase.auth.signUp({
-          email,
+          email: normalizedEmail,
           password,
-          options: { data: { name } },
+          options: { data: { name: trimmedName } },
         });
         if (error) throw error;
         // If email confirmation is required, show a message
@@ -115,15 +118,17 @@ export function LoginPage() {
   };
 
   const handleForgotPassword = async () => {
-    if (!email.trim()) { setError("Enter your email first, then tap Forgot password"); return; }
-    if (!validateEmail(email)) { setError("Please use your UTA email (@mavs.uta.edu)"); return; }
-    
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedEmail) { setError("Enter your email first, then tap Forgot password"); return; }
+    if (!validateEmail(normalizedEmail)) { setError("Please use your UTA email (@mavs.uta.edu)"); return; }
+
     setError("");
     setSuccess("");
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail);
       if (error) throw error;
       setSuccess("Password reset email sent! Check your inbox.");
     } catch (err: any) {

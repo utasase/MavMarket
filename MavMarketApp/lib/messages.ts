@@ -86,7 +86,11 @@ export async function markConversationRead(
   await supabase
     .from("message_reads")
     .upsert(
-      { user_id: userId, conversation_id: conversationId, last_read_at: new Date().toISOString() },
+      {
+        user_id: userId,
+        conversation_id: conversationId,
+        last_read_at: new Date().toISOString(),
+      },
       { onConflict: "user_id,conversation_id" }
     );
 }
@@ -126,27 +130,36 @@ export async function sendMessage(
   });
   if (error) throw error;
 
-  // Fire-and-forget: notify the recipient
-  supabase
-    .from("conversations")
-    .select("buyer_id, seller_id, listing:listings(title, image_url), sender:users!inner(name, avatar_url)")
-    .eq("id", conversationId)
-    .single()
-    .then(async ({ data }) => {
-      if (!data) return;
-      const recipientId = data.buyer_id === senderId ? data.seller_id : data.buyer_id;
-      const listing = data.listing as any;
-      const sender = data.sender as any;
-      await createNotification({
-        userId: recipientId,
-        type: "message",
-        title: sender?.name ?? "New message",
-        message: text.length > 80 ? text.slice(0, 80) + "…" : text,
-        avatarUrl: sender?.avatar_url ?? undefined,
-        itemImage: listing?.image_url ?? undefined,
-      });
-    })
-    .catch(() => { /* best-effort — never crash sendMessage */ });
+  // Best-effort notification enrichment should never fail the send flow.
+  (async () => {
+    const { data: conversation } = await supabase
+      .from("conversations")
+      .select("buyer_id, seller_id, listing:listings(image_url)")
+      .eq("id", conversationId)
+      .single();
+
+    if (!conversation) return;
+
+    const recipientId =
+      conversation.buyer_id === senderId
+        ? conversation.seller_id
+        : conversation.buyer_id;
+
+    const { data: sender } = await supabase
+      .from("users")
+      .select("name, avatar_url")
+      .eq("id", senderId)
+      .single();
+
+    await createNotification({
+      userId: recipientId,
+      type: "system",
+      title: sender?.name ? `New message from ${sender.name}` : "New message",
+      message: text.length > 80 ? `${text.slice(0, 80)}...` : text,
+      avatarUrl: sender?.avatar_url ?? undefined,
+      itemImage: conversation.listing?.image_url ?? undefined,
+    });
+  })().catch(() => {});
 }
 
 export function subscribeToMessages(
@@ -207,7 +220,7 @@ export async function findOrCreateDirectConversation(
     .is("listing_id", null)
     .or(
       `and(buyer_id.eq.${currentUserId},seller_id.eq.${otherUserId}),` +
-      `and(buyer_id.eq.${otherUserId},seller_id.eq.${currentUserId})`
+        `and(buyer_id.eq.${otherUserId},seller_id.eq.${currentUserId})`
     )
     .maybeSingle();
 

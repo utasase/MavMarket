@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { type User as AuthUser } from "@supabase/supabase-js";
 import {
   View,
   Text,
@@ -13,7 +14,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { ArrowLeft, LayoutGrid, Star } from "lucide-react-native";
-import { currentUser as mockUser, type UserProfile, type ListingItem } from "../data/mockData";
+import { type UserProfile, type ListingItem } from "../data/mockData";
 import { StarRating } from "./StarRating";
 import { ReviewsViewer } from "./ReviewsViewer";
 import { getReviews, type Review } from "../lib/reviews";
@@ -148,6 +149,44 @@ const makeStyles = (c: any) => StyleSheet.create({
   reportActionBtnText: { fontSize: 14, color: c.textTertiary },
 });
 
+const emptyProfile: UserProfile = {
+  id: "",
+  name: "",
+  avatar: "",
+  rating: 0,
+  reviewCount: 0,
+  followers: 0,
+  following: 0,
+  bio: "",
+  major: "",
+  year: "",
+  listings: [],
+};
+
+function buildProfileFromAuthUser(user: AuthUser | null): UserProfile {
+  if (!user) return emptyProfile;
+
+  const metadataName =
+    typeof user.user_metadata?.name === "string" ? user.user_metadata.name.trim() : "";
+  const emailPrefix = user.email ? user.email.split("@")[0]?.trim() ?? "" : "";
+  const fallbackName = metadataName || emailPrefix;
+
+  return {
+    ...emptyProfile,
+    id: user.id,
+    name: fallbackName,
+  };
+}
+
+function getProfileHandle(name: string): string {
+  const firstName = name.trim().split(/\s+/).find(Boolean);
+  return (firstName || "profile").toLowerCase();
+}
+
+function getProfileInitial(name: string): string {
+  return name.trim().charAt(0).toUpperCase() || "?";
+}
+
 export function ProfilePage() {
   const { theme } = useTheme();
   const c = theme.colors;
@@ -159,9 +198,10 @@ export function ProfilePage() {
   const { userId: sellerUserId } = useLocalSearchParams<{ userId?: string }>();
   const viewingOtherUser = !!sellerUserId && sellerUserId !== user?.id;
 
-  const [profile, setProfile] = useState<UserProfile>(mockUser);
-  const [listings, setListings] = useState<ListingItem[]>(mockUser.listings);
+  const [profile, setProfile] = useState<UserProfile>(() => buildProfileFromAuthUser(user));
+  const [listings, setListings] = useState<ListingItem[]>([]);
   const [loadingProfile, setLoadingProfile] = useState(false);
+  const [profileError, setProfileError] = useState("");
   const [viewingProfile, setViewingProfile] = useState<UserProfile | null>(null);
   const [showReviews, setShowReviews] = useState(false);
   const [dbReviews, setDbReviews] = useState<Review[]>([]);
@@ -194,22 +234,62 @@ export function ProfilePage() {
     if (profileTab === "starred") loadStarred();
   }, [profileTab, loadStarred]);
 
+  useEffect(() => {
+    if (viewingOtherUser) return;
+    setProfile(buildProfileFromAuthUser(user));
+    setListings([]);
+    setDbReviews([]);
+    setProfileError("");
+  }, [user, viewingOtherUser]);
+
   const loadProfile = useCallback(async () => {
     if (!user) return;
+    const fallbackProfile = buildProfileFromAuthUser(user);
     try {
       setLoadingProfile(true);
-      const [prof, items, reviews, admin] = await Promise.all([
+      setProfileError("");
+      const [profResult, itemsResult, reviewsResult, adminResult] = await Promise.allSettled([
         getCurrentUserProfile(user.id),
         getSellerListings(user.id),
         getReviews(user.id),
         isCurrentUserAdmin(),
       ]);
+
+      const items = itemsResult.status === "fulfilled" ? itemsResult.value : [];
+      const reviews = reviewsResult.status === "fulfilled" ? reviewsResult.value : [];
+      const admin = adminResult.status === "fulfilled" ? adminResult.value : false;
+
       setIsAdmin(admin);
-      if (prof) setProfile({ ...prof, listings: items });
       setListings(items);
       setDbReviews(reviews);
+
+      if (profResult.status === "fulfilled" && profResult.value) {
+        const loadedProfile = profResult.value;
+        setProfile({
+          ...fallbackProfile,
+          ...loadedProfile,
+          name: loadedProfile.name || fallbackProfile.name,
+          listings: items,
+        });
+
+        if (itemsResult.status === "rejected" || reviewsResult.status === "rejected") {
+          setProfileError("Some profile details could not be loaded.");
+        }
+        return;
+      }
+
+      setProfile({ ...fallbackProfile, listings: items });
+      setProfileError(
+        profResult.status === "fulfilled"
+          ? "Profile details are still syncing."
+          : "We could not load your full profile."
+      );
     } catch {
-      // keep mock data if DB not connected
+      setProfile(fallbackProfile);
+      setListings([]);
+      setDbReviews([]);
+      setIsAdmin(false);
+      setProfileError("We could not load your full profile.");
     } finally {
       setLoadingProfile(false);
     }
@@ -301,7 +381,7 @@ export function ProfilePage() {
       {/* Header */}
       <View style={styles.profileHeader}>
         <Text style={styles.profileUsername}>
-          {profile.name.split(" ")[0].toLowerCase()}
+          {getProfileHandle(profile.name)}
         </Text>
         <HeaderMenu isAdmin={isAdmin} onAdminPress={() => setShowAdminPanel(true)} />
       </View>
@@ -312,6 +392,15 @@ export function ProfilePage() {
         </View>
       ) : (
         <ScrollView showsVerticalScrollIndicator={false}>
+          {profileError ? (
+            <View style={styles.emptyListings}>
+              <Text style={styles.emptyListingsText}>{profileError}</Text>
+              <Text style={styles.emptyListingsSubtext}>
+                Your account basics are still available while we retry.
+              </Text>
+            </View>
+          ) : null}
+
           {/* Profile Info */}
           <View style={styles.profileInfo}>
             <View style={styles.profileRow}>
@@ -320,7 +409,7 @@ export function ProfilePage() {
               ) : (
                 <View style={[styles.profileAvatar, styles.avatarPlaceholder]}>
                   <Text style={styles.avatarInitial}>
-                    {profile.name.charAt(0).toUpperCase()}
+                    {getProfileInitial(profile.name)}
                   </Text>
                 </View>
               )}
@@ -562,7 +651,7 @@ function FriendProfile({
         <TouchableOpacity onPress={onBack} style={styles.backBtn}>
           <ArrowLeft size={22} color={c.textPrimary} strokeWidth={1.5} />
         </TouchableOpacity>
-        <Text style={styles.profileUsername}>{profile.name.split(" ")[0].toLowerCase()}</Text>
+        <Text style={styles.profileUsername}>{getProfileHandle(profile.name)}</Text>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -572,7 +661,7 @@ function FriendProfile({
               <Image source={{ uri: profile.avatar }} style={styles.profileAvatar} />
             ) : (
               <View style={[styles.profileAvatar, styles.avatarPlaceholder]}>
-                <Text style={styles.avatarInitial}>{profile.name.charAt(0).toUpperCase()}</Text>
+                <Text style={styles.avatarInitial}>{getProfileInitial(profile.name)}</Text>
               </View>
             )}
             <View style={styles.statsRow}>

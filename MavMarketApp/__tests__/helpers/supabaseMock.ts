@@ -93,7 +93,10 @@ class MockAuthClient {
     return { data: { session: this._user ? { user: this._user } : null }, error: null };
   }
 
+  signInWithPassword = jest.fn().mockResolvedValue({ data: { user: null, session: null }, error: null });
+  signUp = jest.fn().mockResolvedValue({ data: { user: null, session: null }, error: null });
   resetPasswordForEmail = jest.fn().mockResolvedValue({ data: {}, error: null });
+  exchangeCodeForSession = jest.fn().mockResolvedValue({ data: { session: null, user: null }, error: null });
 
   onAuthStateChange = jest.fn().mockReturnValue({
     data: { subscription: { unsubscribe: jest.fn() } },
@@ -133,6 +136,14 @@ export function createSupabaseMock() {
       builder._reset();
       channel._reset();
       auth._setUser(null);
+      auth.signInWithPassword.mockClear();
+      auth.signUp.mockClear();
+      auth.resetPasswordForEmail.mockClear();
+      auth.exchangeCodeForSession.mockClear();
+      auth.signInWithPassword.mockResolvedValue({ data: { user: null, session: null }, error: null });
+      auth.signUp.mockResolvedValue({ data: { user: null, session: null }, error: null });
+      auth.resetPasswordForEmail.mockResolvedValue({ data: {}, error: null });
+      auth.exchangeCodeForSession.mockResolvedValue({ data: { session: null, user: null }, error: null });
       (client.from    as jest.Mock).mockClear();
       (client.channel as jest.Mock).mockClear();
       (client.rpc     as jest.Mock).mockClear();

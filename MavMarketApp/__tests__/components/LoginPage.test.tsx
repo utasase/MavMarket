@@ -38,6 +38,13 @@ jest.mock("../../components/MavLogo", () => ({
   MavLogo: () => null,
 }));
 
+jest.mock("../../lib/ThemeContext", () => {
+  const { darkTheme } = require("../../lib/theme");
+  return {
+    useTheme: () => ({ theme: darkTheme, isDark: true, toggleTheme: jest.fn() }),
+  };
+});
+
 function flattenText(children: React.ReactNode): string {
   if (Array.isArray(children)) return children.map(flattenText).join("");
   if (typeof children === "string" || typeof children === "number") return String(children);
@@ -54,18 +61,26 @@ describe("LoginPage Password Reset", () => {
     });
   });
 
-  const switchToLoginMode = async () => {
+  const pressButton = async (label: string) => {
     const buttons = renderer.root.findAllByType(TouchableOpacity);
-    const loginBtn = buttons.find(b => {
+    const button = buttons.find(b => {
       const text = b.findAllByType(Text).map(t => flattenText(t.props.children)).join("");
-      return text.includes("Log In");
+      return text.includes(label);
     });
-    
-    if (!loginBtn) throw new Error("Could not find Log In button");
-    
+
+    if (!button) throw new Error(`Could not find ${label} button`);
+
     await act(async () => {
-      loginBtn.props.onPress();
+      button.props.onPress();
     });
+  };
+
+  const switchToLoginMode = async () => {
+    await pressButton("Log In");
+  };
+
+  const switchToSignupMode = async () => {
+    await pressButton("Create Account");
   };
 
   const setEmail = async (email: string) => {
@@ -78,18 +93,32 @@ describe("LoginPage Password Reset", () => {
     });
   };
 
-  const pressForgotPassword = async () => {
-    const buttons = renderer.root.findAllByType(TouchableOpacity);
-    const forgotBtn = buttons.find(b => {
-      const text = b.findAllByType(Text).map(t => flattenText(t.props.children)).join("");
-      return text.includes("Forgot password?");
-    });
-    
-    if (!forgotBtn) throw new Error("Could not find Forgot password? button");
-    
+  const setName = async (name: string) => {
+    const inputs = renderer.root.findAllByType(TextInput);
+    const nameInput = inputs.find(i => i.props.placeholder === "Your full name");
+    if (!nameInput) throw new Error("Could not find name input");
+
     await act(async () => {
-      forgotBtn.props.onPress();
+      nameInput.props.onChangeText(name);
     });
+  };
+
+  const setPassword = async (password: string) => {
+    const inputs = renderer.root.findAllByType(TextInput);
+    const passwordInput = inputs.find(i => i.props.placeholder === "At least 6 characters");
+    if (!passwordInput) throw new Error("Could not find password input");
+
+    await act(async () => {
+      passwordInput.props.onChangeText(password);
+    });
+  };
+
+  const pressForgotPassword = async () => {
+    await pressButton("Forgot password?");
+  };
+
+  const submitForm = async (label: string) => {
+    await pressButton(label);
   };
 
   const getStatusText = () => {
@@ -136,5 +165,22 @@ describe("LoginPage Password Reset", () => {
     expect(supabase.auth.resetPasswordForEmail).toHaveBeenCalledWith("unknown@mavs.uta.edu");
     expect(getStatusText()).toContain(errorMessage);
     expect(getStatusText()).not.toContain("Password reset email sent!");
+  });
+
+  it("trims signup email and name before creating the account", async () => {
+    supabase.auth.signUp.mockResolvedValueOnce({ data: { user: null, session: null }, error: null });
+
+    await switchToSignupMode();
+    await setName("  Alice Example  ");
+    await setEmail("  Alice@MAVS.UTA.EDU  ");
+    await setPassword("secret12");
+    await submitForm("Create Account");
+
+    expect(supabase.auth.signUp).toHaveBeenCalledWith({
+      email: "alice@mavs.uta.edu",
+      password: "secret12",
+      options: { data: { name: "Alice Example" } },
+    });
+    expect(getStatusText()).toContain("Account created! Check your email to confirm, then log in.");
   });
 });

@@ -6,6 +6,9 @@ jest.mock('../../lib/supabase', () => {
   mock = require('../helpers/supabaseMock').createSupabaseMock();
   return { supabase: mock.client };
 });
+jest.mock('../../lib/notifications', () => ({
+  createNotification: jest.fn().mockResolvedValue(undefined),
+}));
 
 import {
   getConversations,
@@ -15,11 +18,20 @@ import {
   subscribeToMessages,
   createConversation,
 } from '../../lib/messages';
+import { createNotification } from '../../lib/notifications';
 
-beforeEach(() => mock.reset());
+beforeEach(() => {
+  mock.reset();
+  jest.mocked(createNotification).mockClear();
+});
 
 const BUYER_ID = 'buyer-1';
 const SELLER_ID = 'seller-1';
+
+async function flushMicrotasks() {
+  await Promise.resolve();
+  await Promise.resolve();
+}
 
 // getConversations uses Promise.all([convQuery, readsQuery])
 // Both go through the same builder so we use mockResolveOnce x2 (FIFO queue)
@@ -150,23 +162,45 @@ describe('sendMessage', () => {
     expect(rpcCalls).toHaveLength(1);
     expect(rpcCalls[0][0]).toBe('send_message');
     expect((mock.client.from as jest.Mock).mock.calls).toHaveLength(0);
+    expect(createNotification).not.toHaveBeenCalled();
   });
 
-  it('delegates the whole send flow to a single atomic RPC', async () => {
+  it('delegates the write path to a single RPC and sends a best-effort notification', async () => {
     mock.mockResolveOnce(OK(null));
-    await expect(sendMessage('conv-1', 'user-1', 'Hi')).resolves.toBeUndefined();
+    mock.mockResolveOnce(OK({
+      buyer_id: BUYER_ID,
+      seller_id: SELLER_ID,
+      listing: { image_url: 'book.png' },
+    }));
+    mock.mockResolveOnce(OK({ name: 'Alice', avatar_url: 'alice.png' }));
+
+    await expect(sendMessage('conv-1', BUYER_ID, 'Hi')).resolves.toBeUndefined();
+    await flushMicrotasks();
+
     expect(mock.client.rpc).toHaveBeenCalledWith('send_message', {
       p_conversation_id: 'conv-1',
-      p_sender_id: 'user-1',
+      p_sender_id: BUYER_ID,
       p_text: 'Hi',
     });
-    expect((mock.client.from as jest.Mock).mock.calls).toHaveLength(0);
+    expect((mock.client.from as jest.Mock).mock.calls).toEqual([
+      ['conversations'],
+      ['users'],
+    ]);
+    expect(createNotification).toHaveBeenCalledWith({
+      userId: SELLER_ID,
+      type: 'system',
+      title: 'New message from Alice',
+      message: 'Hi',
+      avatarUrl: 'alice.png',
+      itemImage: 'book.png',
+    });
   });
 
   it('propagates RPC failures instead of hiding them', async () => {
     mock.mockResolveOnce(ERR('insert failed'));
     await expect(sendMessage('conv-1', 'user-1', 'Hi')).rejects.toMatchObject({ message: 'insert failed' });
     expect((mock.client.from as jest.Mock).mock.calls).toHaveLength(0);
+    expect(createNotification).not.toHaveBeenCalled();
   });
 
   it('surfaces a downstream server failure through the single RPC boundary', async () => {
@@ -174,6 +208,17 @@ describe('sendMessage', () => {
     await expect(sendMessage('conv-1', 'user-1', 'Hi')).rejects.toMatchObject({ message: 'update failed' });
     expect((mock.client.from as jest.Mock).mock.calls).toHaveLength(0);
     expect((mock.client.rpc as jest.Mock).mock.calls).toHaveLength(1);
+    expect(createNotification).not.toHaveBeenCalled();
+  });
+
+  it('does not fail the send when notification enrichment fails', async () => {
+    mock.mockResolveOnce(OK(null));
+    mock.mockResolveOnce(ERR('lookup failed'));
+
+    await expect(sendMessage('conv-1', BUYER_ID, 'Hi')).resolves.toBeUndefined();
+    await flushMicrotasks();
+
+    expect(createNotification).not.toHaveBeenCalled();
   });
 });
 
