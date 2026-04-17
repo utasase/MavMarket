@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import { type ListingItem } from "../data/mockData";
+import { type ListingItem } from "./types";
 
 export type ListingStatus = "draft" | "active" | "reserved" | "sold" | "removed";
 
@@ -19,6 +19,29 @@ export interface CreateListingInput {
 // UTA Arlington campus center coordinates (default pickup)
 const UTA_LAT = 32.7299;
 const UTA_LNG = -97.1149;
+
+interface DBListingRow {
+  id: string;
+  title: string;
+  price: number;
+  image_url: string | null;
+  category: string;
+  condition: string;
+  description: string | null;
+  created_at: string;
+  status: ListingStatus;
+  seller_id: string;
+  pickup_location_name: string | null;
+  pickup_location_address: string | null;
+  is_on_campus: boolean | null;
+  locked_by: string | null;
+  locked_at: string | null;
+  seller?: {
+    name: string;
+    avatar_url: string | null;
+    rating: number | null;
+  };
+}
 
 export async function getListings(): Promise<ListingItem[]> {
   const { data, error } = await supabase
@@ -47,7 +70,7 @@ export async function getListings(): Promise<ListingItem[]> {
   if (error) throw error;
   if (!data) return [];
 
-  return data.map((row: any) => ({
+  return (data as unknown as DBListingRow[]).map((row) => ({
     id: row.id,
     title: row.title,
     price: row.price,
@@ -68,8 +91,8 @@ export async function getListings(): Promise<ListingItem[]> {
       lng: UTA_LNG,
       isOnCampus: row.is_on_campus ?? true,
     },
-    lockedBy: row.locked_by,
-    lockedAt: row.locked_at,
+    lockedBy: row.locked_by ?? undefined,
+    lockedAt: row.locked_at ?? undefined,
   }));
 }
 
@@ -88,7 +111,7 @@ export async function getListingsByIds(ids: string[]): Promise<ListingItem[]> {
 
   if (error || !data) return [];
 
-  return data.map((row: any) => ({
+  return (data as unknown as DBListingRow[]).map((row) => ({
     id: row.id,
     title: row.title,
     price: row.price,
@@ -101,7 +124,7 @@ export async function getListingsByIds(ids: string[]): Promise<ListingItem[]> {
     sellerName: row.seller?.name ?? "Unknown",
     sellerAvatar: row.seller?.avatar_url ?? "",
     sellerRating: row.seller?.rating ?? 0,
-    isSold: false,
+    isSold: row.status === "sold",
     pickupLocation: {
       name: row.pickup_location_name ?? "On Campus",
       address: row.pickup_location_address ?? "UTA Campus, Arlington TX",
@@ -109,8 +132,8 @@ export async function getListingsByIds(ids: string[]): Promise<ListingItem[]> {
       lng: UTA_LNG,
       isOnCampus: row.is_on_campus ?? true,
     },
-    lockedBy: row.locked_by,
-    lockedAt: row.locked_at,
+    lockedBy: row.locked_by ?? undefined,
+    lockedAt: row.locked_at ?? undefined,
   }));
 }
 

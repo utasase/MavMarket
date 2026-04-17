@@ -14,7 +14,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Search, SlidersHorizontal, X, Heart } from "lucide-react-native";
-import { listings as mockListings, categories, type ListingItem } from "../data/mockData";
+import { listings as mockListings, categories } from "../data/mockData";
+import { type ListingItem, type ColorTokens } from "../lib/types";
 import { MavLogo } from "./MavLogo";
 import { ItemDetail } from "./ItemDetail";
 import { HeaderMenu } from "./HeaderMenu";
@@ -360,7 +361,7 @@ function AnimatedCard({
   );
 }
 
-function conditionColor(condition: string, c: ReturnType<typeof useTheme>['theme']['colors']): string {
+function conditionColor(condition: string, c: ColorTokens): string {
   switch (condition) {
     case "New": return c.accent;
     case "Like New": return c.success;

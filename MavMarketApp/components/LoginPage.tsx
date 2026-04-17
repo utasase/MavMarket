@@ -11,8 +11,9 @@ import { ArrowRight } from "lucide-react-native";
 import { MavLogo } from "./MavLogo";
 import { useAuth } from "../lib/auth-context";
 import { useTheme } from "../lib/ThemeContext";
+import { type AuthContextType } from "../lib/types";
 
-type LoginAuthState = ReturnType<typeof useAuth> & {
+type LoginAuthState = AuthContextType & {
   authError?: unknown;
   error?: unknown;
   authStatus?: unknown;

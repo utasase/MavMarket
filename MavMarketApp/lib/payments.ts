@@ -1,5 +1,7 @@
 import { supabase } from "./supabase";
-import { Alert, Linking } from "react-native";
+import { Alert } from "react-native";
+import * as Linking from "expo-linking";
+import * as WebBrowser from "expo-web-browser";
 
 const PLATFORM_FEE_PERCENT = 0.05; // 5%
 
@@ -51,8 +53,19 @@ export function calculateTotal(price: number): number {
  * Returns the session ID after the checkout page opens.
  */
 export async function createCheckoutSession(listingId: string): Promise<string | null> {
+  // Resolve redirect URIs at runtime: returns exp://... in Expo Go,
+  // mavmarket://... in a dev-client / standalone build.
+  const successUrl = Linking.createURL("payment-success", {
+    queryParams: { session_id: "{CHECKOUT_SESSION_ID}" },
+  });
+  const cancelUrl = Linking.createURL("payment-cancel");
+
   const { data, error } = await supabase.functions.invoke("create-checkout-session", {
-    body: { listing_id: listingId },
+    body: {
+      listing_id: listingId,
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+    },
   });
 
   if (error) {
@@ -64,13 +77,10 @@ export async function createCheckoutSession(listingId: string): Promise<string |
     throw new Error("No checkout URL returned");
   }
 
-  // Open Stripe Checkout in the system browser
-  const canOpen = await Linking.canOpenURL(data.url);
-  if (canOpen) {
-    await Linking.openURL(data.url);
-  } else {
-    throw new Error("Unable to open checkout page");
-  }
+  // openAuthSessionAsync opens an in-app browser and auto-closes it on redirect
+  // back to the app's redirect URI — works in Expo Go (Safari View Controller).
+  const returnUrl = Linking.createURL("");
+  await WebBrowser.openAuthSessionAsync(data.url, returnUrl);
 
   return data.session_id;
 }

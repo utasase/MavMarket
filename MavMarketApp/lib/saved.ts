@@ -1,6 +1,6 @@
 import { supabase } from "./supabase";
 import { getListingsByIds } from "./listings";
-import { type ListingItem } from "../data/mockData";
+import { type ListingItem } from "./types";
 
 export async function getSavedListingIds(userId: string): Promise<string[]> {
   const { data, error } = await supabase

@@ -1,4 +1,4 @@
-{
+export default {
   "expo": {
     "name": "Mav Market",
     "slug": "MavMarketApp",
@@ -17,6 +17,7 @@
       "bundleIdentifier": "com.chatillyes.MavMarketApp"
     },
     "android": {
+      "package": "com.chatillyes.mavmarket",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -33,7 +34,7 @@
       [
         "react-native-auth0",
         {
-          "domain": "dev-dm41dt1atfentns2.us.auth0.com"
+          "domain": process.env.EXPO_PUBLIC_AUTH0_DOMAIN
         }
       ]
     ]

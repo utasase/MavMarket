@@ -45,12 +45,14 @@ export async function createReview(params: {
   if (error) throw error;
 
   // Fire-and-forget: notify the seller
-  supabase
-    .from("users")
-    .select("name, avatar_url")
-    .eq("id", user.id)
-    .single()
-    .then(async ({ data: reviewer }) => {
+  (async () => {
+    try {
+      const { data: reviewer } = await supabase
+        .from("users")
+        .select("name, avatar_url")
+        .eq("id", user.id)
+        .single();
+      
       const stars = "★".repeat(params.rating) + "☆".repeat(5 - params.rating);
       await createNotification({
         userId: params.sellerId,
@@ -61,8 +63,10 @@ export async function createReview(params: {
           : `${reviewer?.name ?? "Someone"} left you a ${params.rating}-star review`,
         avatarUrl: reviewer?.avatar_url ?? undefined,
       });
-    })
-    .catch(() => { /* best-effort — never crash createReview */ });
+    } catch (e) {
+      // best-effort — never crash createReview
+    }
+  })();
 }
 
 /** Returns true if the current user has already reviewed this seller for this listing */

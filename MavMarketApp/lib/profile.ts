@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import { type UserProfile, type ListingItem } from "../data/mockData";
+import { type UserProfile, type ListingItem } from "./types";
 
 const UTA_LAT = 32.7299;
 const UTA_LNG = -97.1149;

@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import { type Notification } from "../data/mockData";
+import { type Notification } from "./types";
 
 export async function createNotification(params: {
   userId: string;

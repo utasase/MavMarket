@@ -59,13 +59,24 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const { listing_id } = await req.json();
+    const { listing_id, success_url, cancel_url } = await req.json();
     if (!listing_id) {
       return new Response(
         JSON.stringify({ error: "listing_id is required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // Allow client to pass environment-appropriate redirect URIs (exp://... in Expo Go,
+    // mavmarket://... in native builds). Fall back to the custom scheme.
+    const finalSuccessUrl: string =
+      typeof success_url === "string" && success_url.length > 0
+        ? success_url
+        : "mavmarket://payment-success?session_id={CHECKOUT_SESSION_ID}";
+    const finalCancelUrl: string =
+      typeof cancel_url === "string" && cancel_url.length > 0
+        ? cancel_url
+        : "mavmarket://payment-cancel";
 
     // Fetch the listing
     const { data: listing, error: listingError } = await supabaseUser
@@ -155,8 +166,8 @@ Deno.serve(async (req: Request) => {
       "metadata[seller_id]": listing.seller_id,
       "metadata[amount]": listing.price.toString(),
       "metadata[service_fee]": (listing.price * PLATFORM_FEE_PERCENT).toFixed(2),
-      "success_url": "mavmarket://payment-success?session_id={CHECKOUT_SESSION_ID}",
-      "cancel_url": "mavmarket://payment-cancel",
+      "success_url": finalSuccessUrl,
+      "cancel_url": finalCancelUrl,
     };
 
     // Add image if available

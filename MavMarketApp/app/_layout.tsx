@@ -2,12 +2,33 @@ import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, StatusBar } from "react-native";
 import { Slot } from "expo-router";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { Auth0Provider } from "react-native-auth0";
+import Constants from "expo-constants";
 import { SplashScreen } from "../components/SplashScreen";
 import { LoginPage } from "../components/LoginPage";
-import { AuthProvider, useAuth } from "../lib/auth-context";
 import { ThemeProvider, useTheme } from "../lib/ThemeContext";
 import { MavLogo } from "../components/MavLogo";
+import type { AuthContextType } from "../lib/types";
+
+// In Expo Go the native `react-native-auth0` module is unavailable, so we load
+// the expo-auth-session based provider instead. Dev-client / production builds
+// get the native Auth0Provider + useAuth0 path. We check both fields because
+// `appOwnership` is deprecated in favor of `executionEnvironment` in newer SDKs.
+const isExpoGo =
+  Constants.appOwnership === "expo" ||
+  Constants.executionEnvironment === "storeClient";
+
+type AuthModule = {
+  AuthProvider: React.ComponentType<{ children: React.ReactNode }>;
+  useAuth: () => AuthContextType;
+};
+
+const { AuthProvider, useAuth }: AuthModule = isExpoGo
+  ? require("../lib/auth-context.expo")
+  : require("../lib/auth-context");
+
+const Auth0Provider: React.ComponentType<any> = isExpoGo
+  ? ({ children }: { children: React.ReactNode }) => <>{children}</>
+  : require("react-native-auth0").Auth0Provider;
 
 function EmailConfirmedScreen({ onDone }: { onDone: () => void }) {
   const { theme } = useTheme();
@@ -30,7 +51,7 @@ function EmailConfirmedScreen({ onDone }: { onDone: () => void }) {
 }
 
 function AppGate() {
-  const { session, loading, confirmed, clearConfirmed } = useAuth();
+  const { session, loading, justCompletedEmailConfirmation, clearConfirmed } = useAuth();
   const { theme, isDark } = useTheme();
   const [splashDone, setSplashDone] = useState(false);
 
@@ -40,7 +61,7 @@ function AppGate() {
 
   if (loading) return null;
 
-  if (confirmed && session) {
+  if (justCompletedEmailConfirmation && session) {
     return <EmailConfirmedScreen onDone={clearConfirmed} />;
   }
 
@@ -64,7 +85,9 @@ export default function RootLayout() {
     >
       <SafeAreaProvider>
         <ThemeProvider>
-          <ThemedRoot />
+          <AuthProvider>
+            <ThemedRoot />
+          </AuthProvider>
         </ThemeProvider>
       </SafeAreaProvider>
     </Auth0Provider>
@@ -75,9 +98,7 @@ function ThemedRoot() {
   const { theme } = useTheme();
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <AuthProvider>
-        <AppGate />
-      </AuthProvider>
+      <AppGate />
     </View>
   );
 }

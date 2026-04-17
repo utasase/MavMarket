@@ -1,6 +1,8 @@
 // MavMarket Design Token System
 // Dark-mode-first, premium & polished, Depop-inspired
 
+import { type ColorTokens, type Theme } from "./types";
+
 export const spacing = {
   xs: 4,
   sm: 8,
@@ -17,38 +19,6 @@ export const radius = {
   xl: 20,
   full: 9999,
 } as const;
-
-export type ColorTokens = {
-  background: string;
-  surface: string;
-  surfaceElevated: string;
-  border: string;
-  borderLight: string;
-  textPrimary: string;
-  textSecondary: string;
-  textTertiary: string;
-  accent: string;
-  accentLight: string;
-  accentSurface: string;
-  success: string;
-  successSurface: string;
-  error: string;
-  errorSurface: string;
-  warning: string;
-  warningSurface: string;
-  messageBubbleOwn: string;
-  messageBubbleOther: string;
-  overlay: string;
-  shadow: string;
-  tabBar: string;
-  tabBarBorder: string;
-  star: string;
-};
-
-export type Theme = {
-  dark: boolean;
-  colors: ColorTokens;
-};
 
 export const darkTheme: Theme = {
   dark: true,

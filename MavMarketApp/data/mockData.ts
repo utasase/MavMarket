@@ -1,71 +1,6 @@
-export interface ListingItem {
-  id: string;
-  title: string;
-  price: number;
-  image: string;
-  category: string;
-  sellerName: string;
-  sellerAvatar: string;
-  sellerRating: number;
-  description: string;
-  condition: string;
-  postedAt: string;
-  sellerId?: string; // populated when fetched from DB
-  pickupLocation: {
-    name: string;
-    address: string;
-    lat: number;
-    lng: number;
-    isOnCampus: boolean;
-  };
-  lockedBy?: string;
-  lockedAt?: string;
-}
+import { type ListingItem, type Message, type Conversation, type UserProfile, type Notification } from "../lib/types";
 
-export interface Message {
-  id: string;
-  senderId: string;
-  text: string;
-  timestamp: string;
-}
-
-export interface Conversation {
-  id: string;
-  contactName: string;
-  contactAvatar: string;
-  lastMessage: string;
-  lastMessageTime: string;
-  unread: number;
-  itemTitle: string;
-  itemImage: string;
-  messages: Message[];
-}
-
-export interface UserProfile {
-  id: string;
-  name: string;
-  avatar: string;
-  rating: number;
-  reviewCount: number;
-  followers: number;
-  following: number;
-  bio: string;
-  major: string;
-  year: string;
-  listings: ListingItem[];
-  isFollowing?: boolean;
-}
-
-export interface Notification {
-  id: string;
-  type: "follower" | "review" | "item_alert" | "system";
-  title: string;
-  message: string;
-  timestamp: string;
-  read: boolean;
-  avatar?: string;
-  itemImage?: string;
-}
+export { type ListingItem, type Message, type Conversation, type UserProfile, type Notification };
 
 export const categories = [
   "All",
@@ -92,6 +27,7 @@ export const listings: ListingItem[] = [
     description: "Barely used calculus textbook, perfect condition. Some highlighting in chapter 3.",
     condition: "Like New",
     postedAt: "2 hours ago",
+    isSold: false,
     pickupLocation: {
       name: "University of Texas at Arlington",
       address: "701 S Nedderman Dr, Arlington, TX 76019",
@@ -112,6 +48,7 @@ export const listings: ListingItem[] = [
     description: "Selling my MacBook Pro, upgraded to desktop. Comes with charger and case.",
     condition: "Good",
     postedAt: "5 hours ago",
+    isSold: false,
     pickupLocation: {
       name: "The Lofts at West Campus",
       address: "1000 W Mitchell St, Arlington, TX 76013",
@@ -132,6 +69,7 @@ export const listings: ListingItem[] = [
     description: "Great campus bike, recently tuned up. Perfect for getting around UTA.",
     condition: "Good",
     postedAt: "1 day ago",
+    isSold: false,
     pickupLocation: {
       name: "University of Texas at Arlington",
       address: "701 S Nedderman Dr, Arlington, TX 76019",
@@ -152,6 +90,7 @@ export const listings: ListingItem[] = [
     description: "Noise-cancelling headphones, amazing for studying in the library.",
     condition: "Like New",
     postedAt: "3 hours ago",
+    isSold: false,
     pickupLocation: {
       name: "University of Texas at Arlington",
       address: "701 S Nedderman Dr, Arlington, TX 76019",
@@ -172,6 +111,7 @@ export const listings: ListingItem[] = [
     description: "Adjustable LED desk lamp with USB charging port. Multiple brightness settings.",
     condition: "Good",
     postedAt: "6 hours ago",
+    isSold: false,
     pickupLocation: {
       name: "University of Texas at Arlington",
       address: "701 S Nedderman Dr, Arlington, TX 76019",
@@ -192,6 +132,7 @@ export const listings: ListingItem[] = [
     description: "Barely used backpack, tons of compartments. Great for heavy textbook days.",
     condition: "Like New",
     postedAt: "1 day ago",
+    isSold: false,
     pickupLocation: {
       name: "University of Texas at Arlington",
       address: "701 S Nedderman Dr, Arlington, TX 76019",
@@ -212,6 +153,7 @@ export const listings: ListingItem[] = [
     description: "Worn a handful of times. Clean and in great shape.",
     condition: "Good",
     postedAt: "4 hours ago",
+    isSold: false,
     pickupLocation: {
       name: "University of Texas at Arlington",
       address: "701 S Nedderman Dr, Arlington, TX 76019",
@@ -232,6 +174,7 @@ export const listings: ListingItem[] = [
     description: "Great beginner guitar. Comes with a soft case and extra strings.",
     condition: "Good",
     postedAt: "2 days ago",
+    isSold: false,
     pickupLocation: {
       name: "University of Texas at Arlington",
       address: "701 S Nedderman Dr, Arlington, TX 76019",

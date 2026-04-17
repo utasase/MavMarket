@@ -1,6 +1,7 @@
 import { type RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import { createNotification } from "./notifications";
+import { type Message, type Conversation } from "./types";
 
 export interface DBConversation {
   id: string;
@@ -165,7 +166,7 @@ async function sendMessageNotification(
     title: sender?.name ? `New message from ${sender.name}` : "New message",
     message: text.length > 80 ? `${text.slice(0, 80)}...` : text,
     avatarUrl: sender?.avatar_url ?? undefined,
-    itemImage: conversation.listing?.image_url ?? undefined,
+    itemImage: (conversation.listing as any)?.image_url ?? undefined,
   });
 }
 
