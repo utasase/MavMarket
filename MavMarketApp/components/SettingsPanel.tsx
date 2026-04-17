@@ -50,7 +50,7 @@ export function SettingsPanel({ isOpen, onClose, savedItemIds = [], onToggleSave
   });
   const insets = useSafeAreaInsets();
   const slideX = useRef(new Animated.Value(width)).current;
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
 
   const styles = makeStyles(c);
 
@@ -214,7 +214,7 @@ export function SettingsPanel({ isOpen, onClose, savedItemIds = [], onToggleSave
                   onPress={() => {
                     Alert.alert("Sign Out", "Are you sure you want to sign out?", [
                       { text: "Cancel", style: "cancel" },
-                      { text: "Sign Out", style: "destructive", onPress: () => supabase.auth.signOut() },
+                      { text: "Sign Out", style: "destructive", onPress: () => logout() },
                     ]);
                   }}
                   style={styles.menuRow}

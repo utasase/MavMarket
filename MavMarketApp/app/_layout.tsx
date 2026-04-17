@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, StatusBar } from "react-native";
 import { Slot } from "expo-router";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { Auth0Provider } from "react-native-auth0";
 import { SplashScreen } from "../components/SplashScreen";
 import { LoginPage } from "../components/LoginPage";
 import { AuthProvider, useAuth } from "../lib/auth-context";
@@ -57,11 +58,16 @@ function AppGate() {
 
 export default function RootLayout() {
   return (
-    <SafeAreaProvider>
-      <ThemeProvider>
-        <ThemedRoot />
-      </ThemeProvider>
-    </SafeAreaProvider>
+    <Auth0Provider
+      domain={process.env.EXPO_PUBLIC_AUTH0_DOMAIN!}
+      clientId={process.env.EXPO_PUBLIC_AUTH0_CLIENT_ID!}
+    >
+      <SafeAreaProvider>
+        <ThemeProvider>
+          <ThemedRoot />
+        </ThemeProvider>
+      </SafeAreaProvider>
+    </Auth0Provider>
   );
 }
 

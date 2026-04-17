@@ -2,7 +2,26 @@
   "mcpServers": {
     "supabase": {
       "type": "http",
-      "url": "https://mcp.supabase.com/mcp?project_ref=mihvieqggagkfawfxiwh"
+      "url": "https://mcp.supabase.com/mcp?project_ref=cyutmjwmypnrerrquazx",
+      "headers": {
+        "Authorization": "Bearer ${SUPABASE_ACCESS_TOKEN}"
+      }
+    },
+    "stripe": {
+      "type": "http",
+      "url": "https://mcp.stripe.com",
+      "headers": {
+        "Authorization": "Bearer ${STRIPE_API_KEY}"
+      }
+    },
+    "auth0": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@auth0/auth0-mcp-server",
+        "--tools",
+        "*"
+      ]
     }
   }
 }

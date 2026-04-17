@@ -1,0 +1,7 @@
+[mcp_servers.supabase]
+url = "https://mcp.supabase.com/mcp?project_ref=cyutmjwmypnrerrquazx"
+bearer_token_env_var = "SUPABASE_ACCESS_TOKEN"
+
+[mcp_servers.stripe]
+url = "https://mcp.stripe.com"
+bearer_token_env_var = "STRIPE_API_KEY"

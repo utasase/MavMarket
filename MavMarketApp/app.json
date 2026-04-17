@@ -29,7 +29,13 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "react-native-auth0",
+        {
+          "domain": "dev-dm41dt1atfentns2.us.auth0.com"
+        }
+      ]
     ]
   }
 }

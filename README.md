@@ -72,6 +72,15 @@ If those values are missing, the UI still runs against mock data. Network-backed
 
 Provide app env vars through Expo environment configuration, commonly in `MavMarketApp/.env.local`.
 
+### MCP clients
+
+The repo-level `.mcp.json` and project-scoped `.codex/config.toml` target the hosted Supabase MCP server for project `cyutmjwmypnrerrquazx` and the hosted Stripe MCP server.
+
+They expect these auth env vars to already be available in the shell used to launch the MCP client:
+
+- `SUPABASE_ACCESS_TOKEN`
+- `STRIPE_API_KEY`
+
 ### Mobile app
 
 - `EXPO_PUBLIC_SUPABASE_URL`

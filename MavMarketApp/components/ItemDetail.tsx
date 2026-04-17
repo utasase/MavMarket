@@ -90,7 +90,13 @@ export function ItemDetail({ item, onBack, isSaved, onToggleSave }: ItemDetailPr
     if (!canBuy || !user) return;
     setBuyingLoading(true);
     try {
-      await buyNow(item.id, item.title, item.price);
+      const result = await buyNow(item.id, item.title, item.price);
+      if (result.status === "opened") {
+        // The browser is now open to Stripe Checkout.
+        // We could show a hint, but usually the redirect is enough.
+      }
+    } catch (err) {
+      console.error("Buy now unexpected error:", err);
     } finally {
       setBuyingLoading(false);
     }

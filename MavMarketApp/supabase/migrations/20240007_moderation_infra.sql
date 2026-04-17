@@ -5,7 +5,7 @@
 -- ============================================================
 
 -- Admin flag on users
-alter table public.users add column is_admin boolean default false;
+alter table public.users add column if not exists is_admin boolean default false;
 
 -- Extend reports for workflow tracking
 alter table public.reports add column updated_at   timestamptz default now();

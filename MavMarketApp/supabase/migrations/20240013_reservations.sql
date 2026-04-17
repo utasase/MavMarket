@@ -14,7 +14,7 @@ as $$
 declare
   v_locked_by uuid;
   v_locked_at timestamptz;
-  v_is_sold boolean;
+  v_status public.listing_status;
   v_caller_id uuid;
 begin
   v_caller_id := auth.uid();
@@ -23,14 +23,14 @@ begin
   end if;
 
   -- Select current state with FOR UPDATE to lock the row during the check
-  select locked_by, locked_at, is_sold
-  into v_locked_by, v_locked_at, v_is_sold
+  select locked_by, locked_at, status
+  into v_locked_by, v_locked_at, v_status
   from public.listings
   where id = p_listing_id
   for update;
 
   -- If it's sold, cannot be reserved
-  if v_is_sold = true then
+  if v_status = 'sold' then
     return false;
   end if;
 
@@ -61,6 +61,6 @@ begin
   set locked_by = null,
       locked_at = null
   where id = p_listing_id
-  and is_sold = false;
+  and status != 'sold';
 end;
 $$;
