@@ -3,19 +3,26 @@ module.exports = {
   preset: 'jest-expo',
   testEnvironment: 'node',
   testMatch: ['**/__tests__/**/*.test.{ts,tsx}'],
+  // First TestRenderer.create of a complex component can exceed the default
+  // 5s timeout on cold Windows runs; keep a comfortable ceiling.
+  testTimeout: 15000,
   transform: {
     '^.+\\.(js|jsx|ts|tsx)$': ['babel-jest', { configFile: './babel.config.js' }],
   },
   transformIgnorePatterns: [
-    'node_modules/(?!(react-native|@react-native|@react-native-community|expo|expo-modules-core|@expo|lucide-react-native|@supabase)/)',
+    // Match `expo` plus any `expo-*` packages (expo-linking, expo-web-browser, etc.)
+    // and any `@expo/*` scoped package so their ESM sources get transformed.
+    'node_modules/(?!(react-native|@react-native|@react-native-community|expo(-[^/]+)?|@expo(/[^/]+)?|lucide-react-native|@supabase|react-native-reanimated)/)',
   ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
     '\\.svg$': '<rootDir>/__tests__/helpers/fileMock.js',
   },
   setupFiles: [
+    '<rootDir>/__tests__/helpers/envSetup.js',
     '@react-native-async-storage/async-storage/jest/async-storage-mock',
   ],
+  // Per-suite jest.mock() calls wire reanimated in tests that touch it.
   roots: ['<rootDir>/__tests__'],
   modulePaths: ['<rootDir>'],
   globals: {

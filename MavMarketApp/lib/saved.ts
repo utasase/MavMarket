@@ -15,7 +15,10 @@ export async function getSavedListingIds(userId: string): Promise<string[]> {
 export async function saveItem(userId: string, listingId: string): Promise<void> {
   const { error } = await supabase
     .from("saved_items")
-    .insert({ user_id: userId, listing_id: listingId });
+    .upsert(
+      { user_id: userId, listing_id: listingId },
+      { onConflict: "user_id,listing_id", ignoreDuplicates: true }
+    );
   if (error) throw error;
 }
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { type User as AuthUser } from "@supabase/supabase-js";
 import {
   View,
@@ -9,12 +9,25 @@ import {
   StyleSheet,
   Dimensions,
   Alert,
-  ActivityIndicator,
+  Animated,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter, useLocalSearchParams } from "expo-router";
-import { ArrowLeft, LayoutGrid, Star } from "lucide-react-native";
-import { type UserProfile, type ListingItem } from "../data/mockData";
+import {
+  useRouter,
+  useLocalSearchParams,
+  useFocusEffect,
+} from "expo-router";
+import {
+  ArrowLeft,
+  LayoutGrid,
+  Star,
+  MoreHorizontal,
+  Share2,
+  ShieldAlert,
+  Ban,
+  Flag,
+} from "lucide-react-native";
+import { type UserProfile, type ListingItem, type Theme } from "../lib/types";
 import { StarRating } from "./StarRating";
 import { ReviewsViewer } from "./ReviewsViewer";
 import { getReviews, type Review } from "../lib/reviews";
@@ -34,120 +47,20 @@ import { isCurrentUserAdmin } from "../lib/moderation";
 import { AdminModerationPanel } from "./AdminModerationPanel";
 import { HeaderMenu } from "./HeaderMenu";
 import { findOrCreateDirectConversation } from "../lib/messages";
-import { getSavedListings } from "../lib/saved";
+import { useSaved } from "../lib/SavedContext";
+import { ItemDetail } from "./ItemDetail";
 import { useTheme } from "../lib/ThemeContext";
+import { Avatar } from "./ui/Avatar";
+import { Button } from "./ui/Button";
+import { Card } from "./ui/Card";
+import { EmptyState } from "./ui/EmptyState";
+import { IconButton } from "./ui/IconButton";
+import { Skeleton } from "./ui/Skeleton";
+import { spacing, radius } from "../lib/theme";
 
 const { width } = Dimensions.get("window");
-const GRID_CELL = (width - 2) / 3;
-
-const makeStyles = (c: any) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: c.background },
-  centered: { flex: 1, justifyContent: "center", alignItems: "center" },
-  profileHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  profileUsername: { fontSize: 18, color: c.textPrimary },
-  settingsBtn: { padding: 4 },
-  profileInfo: { paddingHorizontal: 16, paddingVertical: 12 },
-  profileRow: { flexDirection: "row", alignItems: "center", gap: 20 },
-  profileAvatar: { width: 80, height: 80, borderRadius: 40, flexShrink: 0 },
-  avatarPlaceholder: { backgroundColor: c.border, justifyContent: "center", alignItems: "center" },
-  avatarInitial: { fontSize: 28, color: c.textSecondary },
-  statsRow: { flex: 1, flexDirection: "row", justifyContent: "space-around" },
-  statItem: { alignItems: "center" },
-  statNumber: { fontSize: 18, color: "#0064B1", lineHeight: 22, fontWeight: "700" },
-  statLabel: { fontSize: 11, color: c.textSecondary },
-  bioBlock: { marginTop: 12, gap: 3 },
-  bioName: { fontSize: 14, color: c.textPrimary },
-  bioText: { fontSize: 12, color: c.textSecondary },
-  bioMetaRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  bioMeta: { fontSize: 12, color: c.textTertiary },
-  ratingBtn: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
-  reviewCountText: { fontSize: 11, color: c.textTertiary },
-  editProfileBtn: {
-    marginTop: 12,
-    paddingVertical: 8,
-    backgroundColor: c.surface,
-    borderWidth: 1,
-    borderColor: c.border,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  editProfileText: { fontSize: 14, color: "#0064B1", fontWeight: "500" },
-  profileTabBar: {
-    flexDirection: "row",
-    borderTopWidth: 1,
-    borderTopColor: c.borderLight,
-    borderBottomWidth: 1,
-    borderBottomColor: c.borderLight,
-  },
-  profileTabBtn: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: 10,
-    borderBottomWidth: 2,
-    borderBottomColor: "transparent",
-  },
-  profileTabBtnActive: { borderBottomColor: "#0064B1" },
-  listingsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 1, backgroundColor: c.borderLight },
-  gridCell: { width: GRID_CELL, height: GRID_CELL, backgroundColor: c.background, position: "relative" },
-  gridImage: { width: GRID_CELL, height: GRID_CELL },
-  gridPriceBadge: {
-    position: "absolute",
-    bottom: 4,
-    left: 4,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  gridPriceText: { color: "#FFFFFF", fontSize: 10 },
-  emptyListings: {
-    width: "100%",
-    padding: 32,
-    alignItems: "center",
-    gap: 6,
-  },
-  emptyListingsText: { fontSize: 14, color: c.textTertiary },
-  emptyListingsSubtext: { fontSize: 12, color: "#D1D5DB", textAlign: "center" },
-  friendProfileHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  backBtn: { padding: 4, marginLeft: -4 },
-  friendActions: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 12,
-  },
-  messageActionBtn: {
-    paddingVertical: 8,
-    backgroundColor: "#0064B1",
-    borderWidth: 1,
-    borderColor: "#0064B1",
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  messageActionBtnText: { fontSize: 14, color: "#FFFFFF", fontWeight: "600" },
-  followingBtn: { backgroundColor: "#EFF6FF", borderColor: "#BFDBFE" },
-  followingBtnText: { color: "#0064B1" },
-  reportActionBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    borderWidth: 1,
-    borderColor: c.border,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  reportActionBtnText: { fontSize: 14, color: c.textTertiary },
-});
+const GRID_GAP = 2;
+const GRID_CELL = (width - GRID_GAP * 2) / 3;
 
 const emptyProfile: UserProfile = {
   id: "",
@@ -165,12 +78,12 @@ const emptyProfile: UserProfile = {
 
 function buildProfileFromAuthUser(user: AuthUser | null): UserProfile {
   if (!user) return emptyProfile;
-
   const metadataName =
-    typeof user.user_metadata?.name === "string" ? user.user_metadata.name.trim() : "";
+    typeof user.user_metadata?.name === "string"
+      ? user.user_metadata.name.trim()
+      : "";
   const emailPrefix = user.email ? user.email.split("@")[0]?.trim() ?? "" : "";
   const fallbackName = metadataName || emailPrefix;
-
   return {
     ...emptyProfile,
     id: user.id,
@@ -183,22 +96,17 @@ function getProfileHandle(name: string): string {
   return (firstName || "profile").toLowerCase();
 }
 
-function getProfileInitial(name: string): string {
-  return name.trim().charAt(0).toUpperCase() || "?";
-}
-
 export function ProfilePage() {
   const { theme } = useTheme();
-  const c = theme.colors;
-  const styles = makeStyles(c);
-
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { userId: sellerUserId } = useLocalSearchParams<{ userId?: string }>();
   const viewingOtherUser = !!sellerUserId && sellerUserId !== user?.id;
 
-  const [profile, setProfile] = useState<UserProfile>(() => buildProfileFromAuthUser(user));
+  const [profile, setProfile] = useState<UserProfile>(() =>
+    buildProfileFromAuthUser(user)
+  );
   const [listings, setListings] = useState<ListingItem[]>([]);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [profileError, setProfileError] = useState("");
@@ -213,26 +121,19 @@ export function ProfilePage() {
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
-  const [profileTab, setProfileTab] = useState<"listings" | "starred">("listings");
-  const [starredListings, setStarredListings] = useState<ListingItem[]>([]);
-  const [loadingStarred, setLoadingStarred] = useState(false);
+  const [profileTab, setProfileTab] = useState<"listings" | "starred">(
+    "listings"
+  );
+  const { savedItems: savedFromContext, setSaved, refresh: refreshSaved } = useSaved();
+  const starredListings = useMemo(
+    () => [...savedFromContext].sort((a, b) => a.title.localeCompare(b.title)),
+    [savedFromContext]
+  );
+  const [selectedListing, setSelectedListing] = useState<ListingItem | null>(
+    null
+  );
 
-  const loadStarred = useCallback(async () => {
-    if (!user) return;
-    setLoadingStarred(true);
-    try {
-      const items = await getSavedListings(user.id);
-      setStarredListings(items.sort((a, b) => a.title.localeCompare(b.title)));
-    } catch {
-      // keep empty
-    } finally {
-      setLoadingStarred(false);
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (profileTab === "starred") loadStarred();
-  }, [profileTab, loadStarred]);
+  const scrollY = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (viewingOtherUser) return;
@@ -248,16 +149,20 @@ export function ProfilePage() {
     try {
       setLoadingProfile(true);
       setProfileError("");
-      const [profResult, itemsResult, reviewsResult, adminResult] = await Promise.allSettled([
-        getCurrentUserProfile(user.id),
-        getSellerListings(user.id),
-        getReviews(user.id),
-        isCurrentUserAdmin(),
-      ]);
+      const [profResult, itemsResult, reviewsResult, adminResult] =
+        await Promise.allSettled([
+          getCurrentUserProfile(user.id),
+          getSellerListings(user.id),
+          getReviews(user.id),
+          isCurrentUserAdmin(),
+        ]);
 
-      const items = itemsResult.status === "fulfilled" ? itemsResult.value : [];
-      const reviews = reviewsResult.status === "fulfilled" ? reviewsResult.value : [];
-      const admin = adminResult.status === "fulfilled" ? adminResult.value : false;
+      const items =
+        itemsResult.status === "fulfilled" ? itemsResult.value : [];
+      const reviews =
+        reviewsResult.status === "fulfilled" ? reviewsResult.value : [];
+      const admin =
+        adminResult.status === "fulfilled" ? adminResult.value : false;
 
       setIsAdmin(admin);
       setListings(items);
@@ -271,8 +176,10 @@ export function ProfilePage() {
           name: loadedProfile.name || fallbackProfile.name,
           listings: items,
         });
-
-        if (itemsResult.status === "rejected" || reviewsResult.status === "rejected") {
+        if (
+          itemsResult.status === "rejected" ||
+          reviewsResult.status === "rejected"
+        ) {
           setProfileError("Some profile details could not be loaded.");
         }
         return;
@@ -300,13 +207,19 @@ export function ProfilePage() {
     loadProfile();
   }, [loadProfile, viewingOtherUser]);
 
-  // Show another user's profile when navigated here with a userId param
+  useFocusEffect(
+    useCallback(() => {
+      if (viewingOtherUser) return;
+      loadProfile();
+      refreshSaved();
+    }, [loadProfile, refreshSaved, viewingOtherUser])
+  );
+
   useEffect(() => {
     if (!sellerUserId || sellerUserId === user?.id) {
       setViewingProfile(null);
       return;
     }
-
     Promise.all([
       getCurrentUserProfile(sellerUserId),
       getPublicSellerListings(sellerUserId),
@@ -335,30 +248,66 @@ export function ProfilePage() {
   };
 
   const handleDeleteListing = (item: ListingItem) => {
-    Alert.alert("Delete Listing", `Delete "${item.title}"? This cannot be undone.`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await deleteListing(item.id);
-            setListings((prev) => prev.filter((l) => l.id !== item.id));
-          } catch (e: any) {
-            Alert.alert("Error", e.message);
-          }
+    Alert.alert(
+      "Delete Listing",
+      `Delete "${item.title}"? This cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteListing(item.id);
+              setListings((prev) => prev.filter((l) => l.id !== item.id));
+            } catch (e: any) {
+              Alert.alert("Error", e.message);
+            }
+          },
         },
-      },
-    ]);
+      ]
+    );
   };
 
   const handleListingLongPress = (item: ListingItem) => {
     Alert.alert(item.title, "What would you like to do?", [
       { text: "Mark as Sold", onPress: () => handleMarkSold(item) },
-      { text: "Delete", style: "destructive", onPress: () => handleDeleteListing(item) },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => handleDeleteListing(item),
+      },
       { text: "Cancel", style: "cancel" },
     ]);
   };
+
+  const handleRemoveSaved = useCallback(
+    (item: ListingItem) => {
+      setSaved(item, false);
+    },
+    [setSaved]
+  );
+
+  const handleSavedLongPress = (item: ListingItem) => {
+    Alert.alert(item.title, "Remove from saved?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Remove",
+        style: "destructive",
+        onPress: () => handleRemoveSaved(item),
+      },
+    ]);
+  };
+
+  const handleToggleSaveFromDetail = useCallback(
+    (item: ListingItem) => {
+      handleRemoveSaved(item);
+      setSelectedListing(null);
+    },
+    [handleRemoveSaved]
+  );
+
+  const styles = useMemo(() => makeStyles(theme), [theme]);
 
   if (showAdminPanel) {
     return <AdminModerationPanel onBack={() => setShowAdminPanel(false)} />;
@@ -376,68 +325,70 @@ export function ProfilePage() {
     );
   }
 
+  const activeGrid =
+    profileTab === "listings" ? listings : starredListings;
+
+  const headerTitleOpacity = scrollY.interpolate({
+    inputRange: [60, 120],
+    outputRange: [0, 1],
+    extrapolate: "clamp",
+  });
+
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.profileHeader}>
-        <Text style={styles.profileUsername}>
+    <View
+      style={[
+        styles.container,
+        { paddingTop: insets.top, backgroundColor: theme.colors.background },
+      ]}
+    >
+      <View style={styles.topBar}>
+        <Animated.Text
+          style={[
+            styles.topBarTitle,
+            {
+              opacity: headerTitleOpacity,
+              color: theme.colors.textPrimary,
+              fontFamily: theme.typography.headline.fontFamily,
+            },
+          ]}
+        >
           {getProfileHandle(profile.name)}
-        </Text>
-        <HeaderMenu isAdmin={isAdmin} onAdminPress={() => setShowAdminPanel(true)} />
+        </Animated.Text>
+        <View style={{ flex: 1 }} />
+        <HeaderMenu
+          isAdmin={isAdmin}
+          onAdminPress={() => setShowAdminPanel(true)}
+        />
       </View>
 
-      {loadingProfile ? (
-        <View style={styles.centered}>
-          <ActivityIndicator color="#0064B1" />
-        </View>
-      ) : (
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {profileError ? (
-            <View style={styles.emptyListings}>
-              <Text style={styles.emptyListingsText}>{profileError}</Text>
-              <Text style={styles.emptyListingsSubtext}>
-                Your account basics are still available while we retry.
-              </Text>
-            </View>
-          ) : null}
+      <Animated.ScrollView
+        showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true }
+        )}
+      >
+        <View style={styles.heroWrap}>
+          <Text style={styles.handleText}>
+            @{getProfileHandle(profile.name)}
+          </Text>
 
-          {/* Profile Info */}
-          <View style={styles.profileInfo}>
-            <View style={styles.profileRow}>
-              {profile.avatar ? (
-                <Image source={{ uri: profile.avatar }} style={styles.profileAvatar} />
+          <View style={styles.avatarRow}>
+            <Avatar
+              source={profile.avatar}
+              name={profile.name || "Mav"}
+              size={88}
+              verified
+            />
+            <View style={styles.nameBlock}>
+              <Text style={styles.name}>{profile.name}</Text>
+              {profile.major || profile.year ? (
+                <Text style={styles.metaLine}>
+                  {[profile.major, profile.year].filter(Boolean).join(" · ")}
+                </Text>
               ) : (
-                <View style={[styles.profileAvatar, styles.avatarPlaceholder]}>
-                  <Text style={styles.avatarInitial}>
-                    {getProfileInitial(profile.name)}
-                  </Text>
-                </View>
-              )}
-              <View style={styles.statsRow}>
-                <View style={styles.statItem}>
-                  <Text style={styles.statNumber}>{listings.length}</Text>
-                  <Text style={styles.statLabel}>listings</Text>
-                </View>
-                <View style={styles.statItem}>
-                  <Text style={styles.statNumber}>{profile.followers}</Text>
-                  <Text style={styles.statLabel}>followers</Text>
-                </View>
-                <View style={styles.statItem}>
-                  <Text style={styles.statNumber}>{profile.following}</Text>
-                  <Text style={styles.statLabel}>following</Text>
-                </View>
-              </View>
-            </View>
-
-            <View style={styles.bioBlock}>
-              <Text style={styles.bioName}>{profile.name}</Text>
-              {profile.bio ? <Text style={styles.bioText}>{profile.bio}</Text> : null}
-              {(profile.major || profile.year) && (
-                <View style={styles.bioMetaRow}>
-                  {profile.major ? <Text style={styles.bioMeta}>{profile.major}</Text> : null}
-                  {profile.major && profile.year ? <Text style={styles.bioMeta}>·</Text> : null}
-                  {profile.year ? <Text style={styles.bioMeta}>{profile.year}</Text> : null}
-                </View>
+                <Text style={styles.metaLine}>UTA Student</Text>
               )}
               <TouchableOpacity
                 onPress={() => {
@@ -450,98 +401,207 @@ export function ProfilePage() {
                 }}
                 style={styles.ratingBtn}
               >
-                <StarRating rating={profile.rating} size={11} />
-                <Text style={styles.reviewCountText}>({profile.reviewCount})</Text>
+                <StarRating rating={profile.rating} size={12} />
+                <Text style={styles.reviewCountText}>
+                  {profile.rating.toFixed(1)} · {profile.reviewCount} review
+                  {profile.reviewCount === 1 ? "" : "s"}
+                </Text>
               </TouchableOpacity>
             </View>
+          </View>
 
-            <TouchableOpacity
-              style={styles.editProfileBtn}
+          {profile.bio ? (
+            <Text style={styles.bio}>{profile.bio}</Text>
+          ) : null}
+
+          <View style={styles.statsRow}>
+            <StatTile label="Listings" value={String(listings.length)} theme={theme} />
+            <StatTile label="Followers" value={String(profile.followers)} theme={theme} />
+            <StatTile label="Following" value={String(profile.following)} theme={theme} />
+          </View>
+
+          <View style={styles.ctaRow}>
+            <Button
+              label="Edit profile"
               onPress={() => setShowEditProfile(true)}
-            >
-              <Text style={styles.editProfileText}>Edit Profile</Text>
-            </TouchableOpacity>
+              variant="secondary"
+              style={{ flex: 1 }}
+            />
+            <Button
+              label="Share"
+              onPress={() => {}}
+              variant="secondary"
+              leftIcon={
+                <Share2
+                  size={14}
+                  color={theme.colors.textPrimary}
+                  strokeWidth={2}
+                />
+              }
+              style={{ flex: 1 }}
+            />
           </View>
 
-          {/* Profile Tab Bar */}
-          <View style={styles.profileTabBar}>
-            <TouchableOpacity
-              onPress={() => setProfileTab("listings")}
-              style={[styles.profileTabBtn, profileTab === "listings" && styles.profileTabBtnActive]}
+          {profileError ? (
+            <View
+              style={[
+                styles.errorBanner,
+                {
+                  backgroundColor: theme.colors.warningSurface,
+                  borderColor: theme.colors.warning,
+                },
+              ]}
             >
-              <LayoutGrid size={20} color={profileTab === "listings" ? "#0064B1" : c.textTertiary} strokeWidth={1.5} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => setProfileTab("starred")}
-              style={[styles.profileTabBtn, profileTab === "starred" && styles.profileTabBtnActive]}
-            >
-              <Star size={20} color={profileTab === "starred" ? "#0064B1" : c.textTertiary} strokeWidth={1.5} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Listings Grid */}
-          {profileTab === "listings" && (
-            <View style={styles.listingsGrid}>
-              {listings.length === 0 ? (
-                <View style={styles.emptyListings}>
-                  <Text style={styles.emptyListingsText}>No listings yet</Text>
-                  <Text style={styles.emptyListingsSubtext}>
-                    Tap + on the home screen to post your first item
-                  </Text>
-                </View>
-              ) : (
-                listings.map((item) => (
-                  <TouchableOpacity
-                    key={item.id}
-                    style={styles.gridCell}
-                    onLongPress={() => handleListingLongPress(item)}
-                    activeOpacity={0.85}
-                  >
-                    <Image source={{ uri: item.image }} style={styles.gridImage} resizeMode="cover" />
-                    <View style={styles.gridPriceBadge}>
-                      <Text style={styles.gridPriceText}>${item.price}</Text>
-                    </View>
-                  </TouchableOpacity>
-                ))
-              )}
+              <Text
+                style={[
+                  styles.errorBannerText,
+                  { color: theme.colors.warning },
+                ]}
+              >
+                {profileError}
+              </Text>
             </View>
-          )}
+          ) : null}
+        </View>
 
-          {/* Starred Grid */}
-          {profileTab === "starred" && (
-            loadingStarred ? (
-              <View style={styles.emptyListings}>
-                <ActivityIndicator color="#0064B1" />
+        <View style={styles.tabBar}>
+          <TouchableOpacity
+            onPress={() => setProfileTab("listings")}
+            style={[
+              styles.tabBtn,
+              profileTab === "listings" && styles.tabBtnActive,
+              profileTab === "listings" && {
+                borderBottomColor: theme.colors.accentLight,
+              },
+            ]}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: profileTab === "listings" }}
+          >
+            <LayoutGrid
+              size={18}
+              color={
+                profileTab === "listings"
+                  ? theme.colors.accentLight
+                  : theme.colors.textTertiary
+              }
+              strokeWidth={1.85}
+            />
+            <Text
+              style={[
+                styles.tabLabel,
+                {
+                  color:
+                    profileTab === "listings"
+                      ? theme.colors.textPrimary
+                      : theme.colors.textTertiary,
+                },
+              ]}
+            >
+              Listings
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setProfileTab("starred")}
+            style={[
+              styles.tabBtn,
+              profileTab === "starred" && styles.tabBtnActive,
+              profileTab === "starred" && {
+                borderBottomColor: theme.colors.accentLight,
+              },
+            ]}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: profileTab === "starred" }}
+          >
+            <Star
+              size={18}
+              color={
+                profileTab === "starred"
+                  ? theme.colors.accentLight
+                  : theme.colors.textTertiary
+              }
+              strokeWidth={1.85}
+            />
+            <Text
+              style={[
+                styles.tabLabel,
+                {
+                  color:
+                    profileTab === "starred"
+                      ? theme.colors.textPrimary
+                      : theme.colors.textTertiary,
+                },
+              ]}
+            >
+              Saved
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {loadingProfile && activeGrid.length === 0 ? (
+          <View style={styles.grid}>
+            {Array.from({ length: 9 }).map((_, i) => (
+              <View
+                key={i}
+                style={[styles.gridCell, { backgroundColor: theme.colors.surface }]}
+              >
+                <Skeleton width={GRID_CELL} height={GRID_CELL} radius={0} />
               </View>
-            ) : (
-              <View style={styles.listingsGrid}>
-                {starredListings.length === 0 ? (
-                  <View style={styles.emptyListings}>
-                    <Star size={28} color="#D1D5DB" strokeWidth={1.5} />
-                    <Text style={styles.emptyListingsText}>No saved items yet</Text>
-                    <Text style={styles.emptyListingsSubtext}>
-                      Tap the heart on a listing to save it for later
-                    </Text>
-                  </View>
-                ) : (
-                  starredListings.map((item) => (
-                    <View key={item.id} style={styles.gridCell}>
-                      <Image source={{ uri: item.image }} style={styles.gridImage} resizeMode="cover" />
-                      <View style={styles.gridPriceBadge}>
-                        <Text style={styles.gridPriceText}>${item.price}</Text>
-                      </View>
-                    </View>
-                  ))
-                )}
-              </View>
-            )
-          )}
-        </ScrollView>
-      )}
+            ))}
+          </View>
+        ) : activeGrid.length === 0 ? (
+          <EmptyState
+            icon={<Star size={24} color={theme.colors.textTertiary} />}
+            title={
+              profileTab === "listings"
+                ? "No listings yet"
+                : "Nothing saved yet"
+            }
+            description={
+              profileTab === "listings"
+                ? "Tap the + tab to post your first listing."
+                : "Tap the heart on a listing to save it for later."
+            }
+          />
+        ) : (
+          <View style={styles.grid}>
+            {activeGrid.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={styles.gridCell}
+                onPress={() => {
+                  if (profileTab === "starred") {
+                    setSelectedListing(item);
+                  }
+                }}
+                onLongPress={() =>
+                  profileTab === "listings"
+                    ? handleListingLongPress(item)
+                    : handleSavedLongPress(item)
+                }
+                activeOpacity={0.85}
+              >
+                <Image
+                  source={{ uri: item.image }}
+                  style={styles.gridImage}
+                  resizeMode="cover"
+                />
+                <View style={styles.gridPriceBadge}>
+                  <Text style={styles.gridPriceText}>${item.price}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        <View style={{ height: 120 }} />
+      </Animated.ScrollView>
 
       <ReviewsViewer
         isOpen={showReviews}
-        onClose={() => { setShowReviews(false); setReviewsFor(null); }}
+        onClose={() => {
+          setShowReviews(false);
+          setReviewsFor(null);
+        }}
         sellerName={reviewsFor?.name || ""}
         overallRating={reviewsFor?.rating || 0}
         reviews={dbReviews}
@@ -557,7 +617,61 @@ export function ProfilePage() {
         }}
       />
 
+      {selectedListing ? (
+        <View style={StyleSheet.absoluteFillObject}>
+          <ItemDetail
+            item={selectedListing}
+            onBack={() => setSelectedListing(null)}
+            isSaved
+            onToggleSave={() => handleToggleSaveFromDetail(selectedListing)}
+          />
+        </View>
+      ) : null}
     </View>
+  );
+}
+
+function StatTile({
+  label,
+  value,
+  theme,
+}: {
+  label: string;
+  value: string;
+  theme: Theme;
+}) {
+  return (
+    <Card
+      variant="surface"
+      padding="md"
+      radius={radius.md}
+      style={{ flex: 1, alignItems: "center" }}
+    >
+      <Text
+        style={{
+          color: theme.colors.textPrimary,
+          fontFamily: theme.typography.title.fontFamily,
+          fontSize: 20,
+          fontWeight: "700",
+          letterSpacing: -0.2,
+        }}
+      >
+        {value}
+      </Text>
+      <Text
+        style={{
+          color: theme.colors.textTertiary,
+          fontFamily: theme.typography.overline.fontFamily,
+          fontSize: 10,
+          letterSpacing: 1.2,
+          fontWeight: "600",
+          textTransform: "uppercase",
+          marginTop: 2,
+        }}
+      >
+        {label}
+      </Text>
+    </Card>
   );
 }
 
@@ -570,17 +684,17 @@ function FriendProfile({
 }) {
   const { theme } = useTheme();
   const c = theme.colors;
-  const styles = makeStyles(c);
-
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const router = useRouter();
+
   const [friendReviews, setFriendReviews] = useState<Review[]>([]);
   const [showFriendReviews, setShowFriendReviews] = useState(false);
   const [messagingLoading, setMessagingLoading] = useState(false);
   const [following, setFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
   const [followerCount, setFollowerCount] = useState(profile.followers);
+  const [moreOpen, setMoreOpen] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -596,14 +710,17 @@ function FriendProfile({
       if (following) {
         await unfollowUser(user.id, profile.id);
         setFollowing(false);
-        setFollowerCount((c) => Math.max(0, c - 1));
+        setFollowerCount((prev) => Math.max(0, prev - 1));
       } else {
         await followUser(user.id, profile.id);
         setFollowing(true);
-        setFollowerCount((c) => c + 1);
+        setFollowerCount((prev) => prev + 1);
       }
     } catch {
-      Alert.alert("Error", "Could not update follow status. Please try again.");
+      Alert.alert(
+        "Error",
+        "Could not update follow status. Please try again."
+      );
     } finally {
       setFollowLoading(false);
     }
@@ -613,8 +730,13 @@ function FriendProfile({
     if (!user) return;
     setMessagingLoading(true);
     try {
-      const conversationId = await findOrCreateDirectConversation(user.id, profile.id);
-      router.push(`/(tabs)/messages?conversationId=${conversationId}` as any);
+      const conversationId = await findOrCreateDirectConversation(
+        user.id,
+        profile.id
+      );
+      router.push(
+        `/(tabs)/messages?conversationId=${conversationId}` as any
+      );
     } catch {
       Alert.alert("Error", "Could not open conversation. Please try again.");
     } finally {
@@ -629,15 +751,26 @@ function FriendProfile({
   }, [profile.id]);
 
   const handleReportUser = () => {
+    setMoreOpen(false);
     Alert.alert("Report User", "Why are you reporting this user?", [
       ...REPORT_REASONS.map((reason) => ({
         text: reason,
         onPress: async () => {
           try {
-            await createReport({ targetType: "user", targetId: profile.id, reason });
-            Alert.alert("Reported", "Thanks for letting us know. We'll review this account.");
+            await createReport({
+              targetType: "user",
+              targetId: profile.id,
+              reason,
+            });
+            Alert.alert(
+              "Reported",
+              "Thanks for letting us know. We'll review this account."
+            );
           } catch {
-            Alert.alert("Error", "Failed to submit report. Please try again.");
+            Alert.alert(
+              "Error",
+              "Failed to submit report. Please try again."
+            );
           }
         },
       })),
@@ -645,94 +778,193 @@ function FriendProfile({
     ]);
   };
 
+  const styles = useMemo(() => makeStyles(theme), [theme]);
+
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.friendProfileHeader}>
-        <TouchableOpacity onPress={onBack} style={styles.backBtn}>
-          <ArrowLeft size={22} color={c.textPrimary} strokeWidth={1.5} />
-        </TouchableOpacity>
-        <Text style={styles.profileUsername}>{getProfileHandle(profile.name)}</Text>
+    <View
+      style={[styles.container, { paddingTop: insets.top, backgroundColor: c.background }]}
+    >
+      <View style={styles.topBar}>
+        <IconButton
+          icon={<ArrowLeft size={20} color={c.textPrimary} strokeWidth={1.85} />}
+          onPress={onBack}
+          accessibilityLabel="Back"
+          size={40}
+        />
+        <Text
+          style={[
+            styles.topBarTitle,
+            { opacity: 1, color: c.textPrimary, fontFamily: theme.typography.headline.fontFamily },
+          ]}
+        >
+          {getProfileHandle(profile.name)}
+        </Text>
+        <View style={{ flex: 1 }} />
+        <IconButton
+          icon={<MoreHorizontal size={20} color={c.textPrimary} strokeWidth={1.85} />}
+          onPress={() => setMoreOpen((v) => !v)}
+          accessibilityLabel="More"
+          size={40}
+        />
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        <View style={styles.profileInfo}>
-          <View style={styles.profileRow}>
-            {profile.avatar ? (
-              <Image source={{ uri: profile.avatar }} style={styles.profileAvatar} />
-            ) : (
-              <View style={[styles.profileAvatar, styles.avatarPlaceholder]}>
-                <Text style={styles.avatarInitial}>{getProfileInitial(profile.name)}</Text>
-              </View>
-            )}
-            <View style={styles.statsRow}>
-              <View style={styles.statItem}>
-                <Text style={styles.statNumber}>{profile.listings.length}</Text>
-                <Text style={styles.statLabel}>listings</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statNumber}>{followerCount}</Text>
-                <Text style={styles.statLabel}>followers</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statNumber}>{profile.following}</Text>
-                <Text style={styles.statLabel}>following</Text>
-              </View>
+        <View style={styles.heroWrap}>
+          <View style={styles.avatarRow}>
+            <Avatar
+              source={profile.avatar}
+              name={profile.name || "Mav"}
+              size={88}
+              verified
+            />
+            <View style={styles.nameBlock}>
+              <Text style={styles.name}>{profile.name}</Text>
+              {profile.major || profile.year ? (
+                <Text style={styles.metaLine}>
+                  {[profile.major, profile.year].filter(Boolean).join(" · ")}
+                </Text>
+              ) : null}
+              <TouchableOpacity
+                onPress={() => setShowFriendReviews(true)}
+                style={styles.ratingBtn}
+              >
+                <StarRating rating={profile.rating} size={12} />
+                <Text style={styles.reviewCountText}>
+                  {profile.rating.toFixed(1)} ·{" "}
+                  {friendReviews.length > 0
+                    ? friendReviews.length
+                    : profile.reviewCount}{" "}
+                  review
+                  {profile.reviewCount === 1 ? "" : "s"}
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
 
-          <View style={styles.bioBlock}>
-            <Text style={styles.bioName}>{profile.name}</Text>
-            {profile.bio ? <Text style={styles.bioText}>{profile.bio}</Text> : null}
-            <TouchableOpacity
-              onPress={() => setShowFriendReviews(true)}
-              style={styles.ratingBtn}
-            >
-              <StarRating rating={profile.rating} size={11} />
-              <Text style={styles.reviewCountText}>
-                ({friendReviews.length > 0 ? friendReviews.length : profile.reviewCount})
-              </Text>
-            </TouchableOpacity>
+          {profile.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
+
+          <View style={styles.statsRow}>
+            <StatTile
+              label="Listings"
+              value={String(profile.listings.length)}
+              theme={theme}
+            />
+            <StatTile
+              label="Followers"
+              value={String(followerCount)}
+              theme={theme}
+            />
+            <StatTile
+              label="Following"
+              value={String(profile.following)}
+              theme={theme}
+            />
           </View>
 
-          <View style={styles.friendActions}>
-            <TouchableOpacity
-              style={[
-                styles.messageActionBtn,
-                { flex: 1, opacity: followLoading ? 0.6 : 1 },
-                following && styles.followingBtn,
-              ]}
+          <View style={styles.ctaRow}>
+            <Button
+              label={messagingLoading ? "Opening" : "Message"}
+              onPress={handleMessage}
+              loading={messagingLoading}
+              disabled={messagingLoading}
+              variant="primary"
+              style={{ flex: 1 }}
+            />
+            <Button
+              label={following ? "Following" : "Follow"}
               onPress={handleFollowToggle}
               disabled={followLoading}
+              variant={following ? "secondary" : "secondary"}
+              style={{ flex: 1 }}
+            />
+          </View>
+
+          {moreOpen ? (
+            <Card variant="elevated" padding="none" style={styles.moreMenu}>
+              <MenuRow
+                icon={
+                  <Share2
+                    size={16}
+                    color={c.textPrimary}
+                    strokeWidth={2}
+                  />
+                }
+                label="Share profile"
+                onPress={() => setMoreOpen(false)}
+                theme={theme}
+              />
+              <MenuRow
+                icon={
+                  <Flag size={16} color={c.error} strokeWidth={2} />
+                }
+                label="Report"
+                onPress={handleReportUser}
+                theme={theme}
+                destructive
+              />
+              <MenuRow
+                icon={
+                  <Ban size={16} color={c.error} strokeWidth={2} />
+                }
+                label="Block user"
+                onPress={() => setMoreOpen(false)}
+                theme={theme}
+                destructive
+              />
+            </Card>
+          ) : null}
+        </View>
+
+        <View style={[styles.tabBar, { borderBottomColor: c.hairline }]}>
+          <View
+            style={[
+              styles.tabBtn,
+              styles.tabBtnActive,
+              { borderBottomColor: c.accentLight },
+            ]}
+          >
+            <LayoutGrid
+              size={18}
+              color={c.accentLight}
+              strokeWidth={1.85}
+            />
+            <Text
+              style={[
+                styles.tabLabel,
+                { color: c.textPrimary },
+              ]}
             >
-              <Text style={[styles.messageActionBtnText, following && styles.followingBtnText]}>
-                {followLoading ? "..." : following ? "Following" : "Follow"}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.messageActionBtn, { flex: 1, opacity: messagingLoading ? 0.6 : 1 }]}
-              onPress={handleMessage}
-              disabled={messagingLoading}
-            >
-              <Text style={styles.messageActionBtnText}>
-                {messagingLoading ? "Opening..." : "Message"}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={handleReportUser} style={styles.reportActionBtn}>
-              <Text style={styles.reportActionBtnText}>Report</Text>
-            </TouchableOpacity>
+              Listings
+            </Text>
           </View>
         </View>
 
-        <View style={[styles.listingsGrid, { borderTopWidth: 1, borderTopColor: c.borderLight }]}>
-          {profile.listings.map((item) => (
-            <View key={item.id} style={styles.gridCell}>
-              <Image source={{ uri: item.image }} style={styles.gridImage} resizeMode="cover" />
-              <View style={styles.gridPriceBadge}>
-                <Text style={styles.gridPriceText}>${item.price}</Text>
+        {profile.listings.length === 0 ? (
+          <EmptyState
+            icon={
+              <ShieldAlert size={24} color={c.textTertiary} />
+            }
+            title="No listings yet"
+            description="When this Maverick posts something, it will show up here."
+          />
+        ) : (
+          <View style={styles.grid}>
+            {profile.listings.map((item) => (
+              <View key={item.id} style={styles.gridCell}>
+                <Image
+                  source={{ uri: item.image }}
+                  style={styles.gridImage}
+                  resizeMode="cover"
+                />
+                <View style={styles.gridPriceBadge}>
+                  <Text style={styles.gridPriceText}>${item.price}</Text>
+                </View>
               </View>
-            </View>
-          ))}
-        </View>
+            ))}
+          </View>
+        )}
+
+        <View style={{ height: 120 }} />
       </ScrollView>
 
       <ReviewsViewer
@@ -744,4 +976,190 @@ function FriendProfile({
       />
     </View>
   );
+}
+
+function MenuRow({
+  icon,
+  label,
+  onPress,
+  theme,
+  destructive,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onPress: () => void;
+  theme: Theme;
+  destructive?: boolean;
+}) {
+  const color = destructive ? theme.colors.error : theme.colors.textPrimary;
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: spacing.md,
+        paddingHorizontal: spacing.lg,
+        paddingVertical: spacing.md,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: theme.colors.hairline,
+      }}
+      accessibilityRole="button"
+    >
+      {icon}
+      <Text
+        style={{
+          color,
+          fontFamily: theme.typography.body.fontFamily,
+          fontSize: 15,
+          fontWeight: "500",
+        }}
+      >
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+function makeStyles(theme: Theme) {
+  const c = theme.colors;
+  const t = theme.typography;
+  return StyleSheet.create({
+    container: { flex: 1 },
+    topBar: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.xs,
+      gap: spacing.sm,
+    },
+    topBarTitle: {
+      color: c.textPrimary,
+      fontSize: 16,
+      fontWeight: "600",
+      paddingHorizontal: spacing.sm,
+    },
+    heroWrap: {
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.md,
+      gap: spacing.lg,
+    },
+    handleText: {
+      color: c.textTertiary,
+      fontFamily: t.label.fontFamily,
+      fontSize: 13,
+      letterSpacing: 0.2,
+    },
+    avatarRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.lg,
+    },
+    nameBlock: {
+      flex: 1,
+      gap: 2,
+    },
+    name: {
+      color: c.textPrimary,
+      fontFamily: t.title.fontFamily,
+      fontSize: 22,
+      lineHeight: 28,
+      letterSpacing: -0.3,
+      fontWeight: "700",
+    },
+    metaLine: {
+      color: c.textSecondary,
+      fontFamily: t.caption.fontFamily,
+      fontSize: 12,
+      marginTop: 2,
+    },
+    ratingBtn: {
+      marginTop: spacing.xs,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.xs,
+    },
+    reviewCountText: {
+      color: c.textSecondary,
+      fontFamily: t.caption.fontFamily,
+      fontSize: 12,
+    },
+    bio: {
+      color: c.textSecondary,
+      fontFamily: t.body.fontFamily,
+      fontSize: 14,
+      lineHeight: 20,
+    },
+    statsRow: {
+      flexDirection: "row",
+      gap: spacing.sm,
+    },
+    ctaRow: {
+      flexDirection: "row",
+      gap: spacing.sm,
+    },
+    errorBanner: {
+      borderWidth: 1,
+      borderRadius: radius.md,
+      padding: spacing.md,
+    },
+    errorBannerText: {
+      fontFamily: t.body.fontFamily,
+      fontSize: 13,
+    },
+    moreMenu: {
+      marginTop: spacing.sm,
+    },
+    tabBar: {
+      flexDirection: "row",
+      marginTop: spacing.xl,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: c.hairline,
+    },
+    tabBtn: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: spacing.xs,
+      paddingVertical: spacing.md,
+      borderBottomWidth: 2,
+      borderBottomColor: "transparent",
+    },
+    tabBtnActive: {},
+    tabLabel: {
+      fontFamily: t.label.fontFamily,
+      fontSize: 13,
+      fontWeight: "600",
+      letterSpacing: 0.2,
+    },
+    grid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: GRID_GAP,
+      paddingHorizontal: 0,
+      backgroundColor: c.hairline,
+    },
+    gridCell: {
+      width: GRID_CELL,
+      height: GRID_CELL,
+      position: "relative",
+      backgroundColor: c.surface,
+    },
+    gridImage: { width: "100%", height: "100%" },
+    gridPriceBadge: {
+      position: "absolute",
+      bottom: spacing.xs,
+      left: spacing.xs,
+      backgroundColor: "rgba(0,0,0,0.55)",
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 2,
+      borderRadius: radius.full,
+    },
+    gridPriceText: {
+      color: "#FFFFFF",
+      fontSize: 10,
+      fontWeight: "700",
+    },
+  });
 }

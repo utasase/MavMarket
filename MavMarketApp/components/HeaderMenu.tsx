@@ -1,8 +1,8 @@
 import React, { useState } from "react";
-import { TouchableOpacity } from "react-native";
 import { Menu } from "lucide-react-native";
 import { SettingsPanel } from "./SettingsPanel";
 import { useTheme } from "../lib/ThemeContext";
+import { IconButton } from "./ui/IconButton";
 
 interface HeaderMenuProps {
   isAdmin?: boolean;
@@ -22,9 +22,12 @@ export function HeaderMenu({
 
   return (
     <>
-      <TouchableOpacity onPress={() => setOpen(true)} style={{ padding: 6 }}>
-        <Menu size={22} color={theme.colors.textPrimary} strokeWidth={1.5} />
-      </TouchableOpacity>
+      <IconButton
+        icon={<Menu size={20} color={theme.colors.textPrimary} strokeWidth={1.75} />}
+        onPress={() => setOpen(true)}
+        accessibilityLabel="Open menu"
+        size={40}
+      />
       <SettingsPanel
         isOpen={open}
         onClose={() => setOpen(false)}

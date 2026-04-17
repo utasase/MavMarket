@@ -1,22 +1,17 @@
 import React from "react";
 import * as TestRenderer from "react-test-renderer";
 import { AuthProvider, useAuth } from "../../lib/auth-context";
-import { useAuth0 } from "react-native-auth0";
 import { supabase } from "../../lib/supabase";
 
 const { act } = TestRenderer;
 
-// Mock dependencies
-jest.mock("react-native-auth0", () => ({
-  useAuth0: jest.fn(),
-  Auth0Provider: ({ children }: any) => children,
-}));
-
 jest.mock("../../lib/supabase", () => ({
   supabase: {
     auth: {
-      signInWithIdToken: jest.fn(),
+      signInWithPassword: jest.fn(),
+      signUp: jest.fn(),
       getSession: jest.fn(),
+      onAuthStateChange: jest.fn(),
       signOut: jest.fn(),
     },
   },
@@ -28,136 +23,279 @@ jest.mock("@react-native-async-storage/async-storage", () => ({
   removeItem: jest.fn(),
 }));
 
-describe("AuthContext Integration", () => {
-  let mockAuth0: any;
+type AuthListener = (
+  event: string,
+  session: unknown
+) => void;
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockAuth0 = {
-      authorize: jest.fn().mockResolvedValue({}),
-      clearSession: jest.fn().mockResolvedValue({}),
-      user: null,
-      isLoading: false,
-      getCredentials: jest.fn().mockResolvedValue({ idToken: "fake-token" }),
-    };
-    (useAuth0 as jest.Mock).mockReturnValue(mockAuth0);
-    (supabase.auth.getSession as jest.Mock).mockResolvedValue({ data: { session: null }, error: null });
-    (supabase.auth.signInWithIdToken as jest.Mock).mockResolvedValue({ data: { session: { user: { id: "sb-user" } } }, error: null });
-    (supabase.auth.signOut as jest.Mock).mockResolvedValue({ error: null });
-  });
-
-  const TestComponent = ({ onAuth }: { onAuth: (auth: any) => void }) => {
+function captureAuth(onAuth: (auth: ReturnType<typeof useAuth>) => void) {
+  return function Probe() {
     const auth = useAuth();
     React.useEffect(() => {
       onAuth(auth);
     }, [auth]);
     return null;
   };
+}
 
-  it("Test A: justCompletedEmailConfirmation is false after normal login", async () => {
-    let currentAuth: any;
-    await act(async () => {
-      TestRenderer.create(
-        <AuthProvider>
-          <TestComponent onAuth={(auth) => { currentAuth = auth; }} />
-        </AuthProvider>
-      );
+async function renderProvider() {
+  let current: ReturnType<typeof useAuth> | undefined;
+  const Probe = captureAuth((a) => {
+    current = a;
+  });
+  let renderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    renderer = TestRenderer.create(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>
+    );
+  });
+  // Flush post-mount effects (getSession, setInitializing).
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 0));
+  });
+  return { renderer, getAuth: () => current! };
+}
+
+describe("AuthContext (Supabase email + password)", () => {
+  let authListeners: AuthListener[] = [];
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    authListeners = [];
+
+    (supabase.auth.getSession as jest.Mock).mockResolvedValue({
+      data: { session: null },
+      error: null,
     });
-
-    await act(async () => {
-      await currentAuth.login();
-    });
-
-    expect(currentAuth.justCompletedEmailConfirmation).toBe(false);
+    (supabase.auth.onAuthStateChange as jest.Mock).mockImplementation(
+      (cb: AuthListener) => {
+        authListeners.push(cb);
+        return {
+          data: { subscription: { unsubscribe: jest.fn() } },
+        };
+      }
+    );
+    (supabase.auth.signOut as jest.Mock).mockResolvedValue({ error: null });
   });
 
-  it("Test B: loading state is true during sign-in", async () => {
-    let currentAuth: any;
-    let resolveLogin: any;
-    const loginPromise = new Promise((resolve) => { resolveLogin = resolve; });
-    
-    mockAuth0.authorize.mockReturnValue(loginPromise);
-
-    let renderer: any;
-    await act(async () => {
-      renderer = TestRenderer.create(
-        <AuthProvider>
-          <TestComponent onAuth={(auth) => { currentAuth = auth; }} />
-        </AuthProvider>
-      );
-    });
-
-    // Wait for initial loading to finish
-    await act(async () => {
-      await new Promise(r => setTimeout(r, 0));
-    });
-    expect(currentAuth.loading).toBe(false);
-
-    let midFlightLoading: boolean = false;
-    
-    // Start login
-    let loginCall: Promise<void>;
-    await act(async () => {
-      // Simulate Auth0 starting to load
-      const loadingMock = { ...mockAuth0, isLoading: true };
-      (useAuth0 as jest.Mock).mockReturnValue(loadingMock);
-      
-      loginCall = currentAuth.login();
-    });
-
-    // Force re-render to see mid-flight loading
-    await act(async () => {
-      renderer.update(
-        <AuthProvider>
-          <TestComponent onAuth={(auth) => { currentAuth = auth; }} />
-        </AuthProvider>
-      );
-    });
-    midFlightLoading = currentAuth.loading;
-    
-    await act(async () => {
-      // Update mock to simulate user change and loading finished
-      const updatedMock = { ...mockAuth0, user: { email: "test@mavs.uta.edu" }, isLoading: false };
-      (useAuth0 as jest.Mock).mockReturnValue(updatedMock);
-      
-      resolveLogin({});
-      await loginCall;
-    });
-
-    // Wait for all async effects to settle
-    for (let i = 0; i < 5; i++) {
-      await act(async () => {
-        await new Promise(r => setTimeout(r, 50));
-        renderer.update(
-          <AuthProvider>
-            <TestComponent onAuth={(auth) => { currentAuth = auth; }} />
-          </AuthProvider>
-        );
-      });
-    }
-
-    expect(midFlightLoading).toBe(true);
-    expect(currentAuth.loading).toBe(false);
+  it("finishes initializing to false when no stored session", async () => {
+    const { getAuth } = await renderProvider();
+    expect(getAuth().initializing).toBe(false);
+    expect(getAuth().session).toBeNull();
+    expect(getAuth().loading).toBe(false);
   });
 
-  it("Test C: logout clears Supabase session even when clearSession throws", async () => {
-    mockAuth0.clearSession.mockRejectedValue(new Error("Auth0 Error"));
-    mockAuth0.user = { email: "test@uta.edu" };
-
-    let currentAuth: any;
-    await act(async () => {
-      TestRenderer.create(
-        <AuthProvider>
-          <TestComponent onAuth={(auth) => { currentAuth = auth; }} />
-        </AuthProvider>
-      );
+  it("restores an existing Supabase session on mount", async () => {
+    (supabase.auth.getSession as jest.Mock).mockResolvedValue({
+      data: {
+        session: {
+          access_token: "token",
+          user: { id: "u1", email: "restored@mavs.uta.edu" },
+        },
+      },
+      error: null,
     });
 
-    await act(async () => {
-      await currentAuth.logout();
+    const { getAuth } = await renderProvider();
+    expect(getAuth().initializing).toBe(false);
+    expect(getAuth().user?.email).toBe("restored@mavs.uta.edu");
+  });
+
+  it("loginWithPassword: happy path sets session", async () => {
+    (supabase.auth.signInWithPassword as jest.Mock).mockResolvedValue({
+      data: {
+        session: {
+          access_token: "token",
+          user: { id: "u1", email: "student@mavs.uta.edu" },
+        },
+      },
+      error: null,
     });
 
-    expect(supabase.auth.signOut).toHaveBeenCalled();
-    expect(currentAuth.session).toBeNull();
+    const { getAuth } = await renderProvider();
+
+    await act(async () => {
+      await getAuth().loginWithPassword("student@mavs.uta.edu", "hunter22!");
+    });
+
+    expect(supabase.auth.signInWithPassword).toHaveBeenCalledWith({
+      email: "student@mavs.uta.edu",
+      password: "hunter22!",
+    });
+    expect(getAuth().session).not.toBeNull();
+    expect(getAuth().user?.email).toBe("student@mavs.uta.edu");
+    expect(getAuth().error).toBeNull();
+    expect(getAuth().loading).toBe(false);
+  });
+
+  it("loginWithPassword: surfaces friendly error for bad credentials", async () => {
+    (supabase.auth.signInWithPassword as jest.Mock).mockResolvedValue({
+      data: { session: null, user: null },
+      error: { message: "Invalid login credentials" },
+    });
+
+    const { getAuth } = await renderProvider();
+
+    await act(async () => {
+      await getAuth()
+        .loginWithPassword("student@mavs.uta.edu", "bad")
+        .catch(() => {});
+    });
+
+    expect(getAuth().session).toBeNull();
+    expect(getAuth().error).toMatch(/incorrect email or password/i);
+  });
+
+  it("loginWithPassword: rejects non-UTA emails before hitting Supabase", async () => {
+    const { getAuth } = await renderProvider();
+
+    await act(async () => {
+      await getAuth()
+        .loginWithPassword("stranger@gmail.com", "hunter22!")
+        .catch(() => {});
+    });
+
+    expect(supabase.auth.signInWithPassword).not.toHaveBeenCalled();
+    expect(getAuth().error).toMatch(/UTA email/i);
+  });
+
+  it("signup: creates user and sets welcome flag when session is returned", async () => {
+    (supabase.auth.signUp as jest.Mock).mockResolvedValue({
+      data: {
+        session: {
+          access_token: "token",
+          user: { id: "u2", email: "new@mavs.uta.edu" },
+        },
+        user: { id: "u2", email: "new@mavs.uta.edu" },
+      },
+      error: null,
+    });
+
+    const { getAuth } = await renderProvider();
+
+    await act(async () => {
+      await getAuth().signup("new@mavs.uta.edu", "hunter22!", "New User");
+    });
+
+    expect(supabase.auth.signUp).toHaveBeenCalledWith({
+      email: "new@mavs.uta.edu",
+      password: "hunter22!",
+      options: { data: { display_name: "New User", name: "New User" } },
+    });
+    expect(getAuth().session).not.toBeNull();
+    expect(getAuth().justCompletedEmailConfirmation).toBe(true);
+  });
+
+  it("signup: shows info message when confirm-email is enabled (no session)", async () => {
+    (supabase.auth.signUp as jest.Mock).mockResolvedValue({
+      data: { session: null, user: { id: "u3", email: "pending@mavs.uta.edu" } },
+      error: null,
+    });
+
+    const { getAuth } = await renderProvider();
+
+    await act(async () => {
+      await getAuth().signup("pending@mavs.uta.edu", "hunter22!");
+    });
+
+    expect(getAuth().session).toBeNull();
+    expect(getAuth().info).toMatch(/confirm your account/i);
+    expect(getAuth().justCompletedEmailConfirmation).toBe(false);
+  });
+
+  it("signup: surfaces 'user already registered' as friendly message", async () => {
+    (supabase.auth.signUp as jest.Mock).mockResolvedValue({
+      data: { session: null, user: null },
+      error: { message: "User already registered", name: "AuthApiError" },
+    });
+
+    const { getAuth } = await renderProvider();
+
+    await act(async () => {
+      await getAuth()
+        .signup("dup@mavs.uta.edu", "hunter22!")
+        .catch(() => {});
+    });
+
+    expect(getAuth().error).toMatch(/already exists/i);
+  });
+
+  it("signup: maps AuthError.code 'user_already_exists' to friendly message", async () => {
+    (supabase.auth.signUp as jest.Mock).mockResolvedValue({
+      data: { session: null, user: null },
+      error: {
+        message: "Invalid sign up",
+        name: "AuthApiError",
+        code: "user_already_exists",
+        status: 422,
+      },
+    });
+
+    const { getAuth } = await renderProvider();
+
+    await act(async () => {
+      await getAuth()
+        .signup("dup@mavs.uta.edu", "hunter22!")
+        .catch(() => {});
+    });
+
+    expect(getAuth().error).toMatch(/already exists/i);
+  });
+
+  it("signup: maps terse 'Invalid sign up' message to friendly 'already exists'", async () => {
+    (supabase.auth.signUp as jest.Mock).mockResolvedValue({
+      data: { session: null, user: null },
+      error: { message: "Invalid sign up", name: "AuthApiError" },
+    });
+
+    const { getAuth } = await renderProvider();
+
+    await act(async () => {
+      await getAuth()
+        .signup("dup@mavs.uta.edu", "hunter22!")
+        .catch(() => {});
+    });
+
+    expect(getAuth().error).toMatch(/already exists/i);
+  });
+
+  it("loginWithPassword: maps AuthError.code 'invalid_credentials' to friendly message", async () => {
+    (supabase.auth.signInWithPassword as jest.Mock).mockResolvedValue({
+      data: { session: null, user: null },
+      error: {
+        message: "Invalid login credentials",
+        name: "AuthApiError",
+        code: "invalid_credentials",
+        status: 400,
+      },
+    });
+
+    const { getAuth } = await renderProvider();
+
+    await act(async () => {
+      await getAuth()
+        .loginWithPassword("student@mavs.uta.edu", "bad")
+        .catch(() => {});
+    });
+
+    expect(getAuth().error).toMatch(/incorrect email or password/i);
+  });
+
+  it("logout clears the session even when signOut throws", async () => {
+    (supabase.auth.signOut as jest.Mock).mockRejectedValue(
+      new Error("supabase offline")
+    );
+
+    const { getAuth } = await renderProvider();
+
+    await act(async () => {
+      await getAuth().logout();
+    });
+
+    expect(getAuth().session).toBeNull();
+    expect(getAuth().justCompletedEmailConfirmation).toBe(false);
+    expect(getAuth().error).toBeNull();
   });
 });

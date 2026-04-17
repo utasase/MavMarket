@@ -1,15 +1,26 @@
 const mockAlert = jest.fn();
-const mockCanOpenURL = jest.fn();
-const mockOpenURL = jest.fn();
 const mockInvoke = jest.fn();
+const mockOpenAuthSessionAsync = jest.fn();
+const mockCreateURL = jest.fn();
+const mockRouterPush = jest.fn();
 
 jest.mock('react-native', () => ({
   Alert: {
     alert: (...args: unknown[]) => mockAlert(...args),
   },
-  Linking: {
-    canOpenURL: (...args: unknown[]) => mockCanOpenURL(...args),
-    openURL: (...args: unknown[]) => mockOpenURL(...args),
+}));
+
+jest.mock('expo-linking', () => ({
+  createURL: (...args: unknown[]) => mockCreateURL(...args),
+}));
+
+jest.mock('expo-web-browser', () => ({
+  openAuthSessionAsync: (...args: unknown[]) => mockOpenAuthSessionAsync(...args),
+}));
+
+jest.mock('expo-router', () => ({
+  router: {
+    push: (...args: unknown[]) => mockRouterPush(...args),
   },
 }));
 
@@ -52,9 +63,20 @@ describe('buyNow', () => {
 
   beforeEach(() => {
     mockAlert.mockReset();
-    mockCanOpenURL.mockReset();
-    mockOpenURL.mockReset();
     mockInvoke.mockReset();
+    mockOpenAuthSessionAsync.mockReset();
+    mockCreateURL.mockReset();
+    mockRouterPush.mockReset();
+
+    // Simulate deep-link URL generation like Expo Linking does at runtime.
+    mockCreateURL.mockImplementation((path: string, options?: { queryParams?: Record<string, string> }) => {
+      const qp = options?.queryParams
+        ? '?' + new URLSearchParams(options.queryParams).toString()
+        : '';
+      return `mavmarket://${path}${qp}`;
+    });
+    mockOpenAuthSessionAsync.mockResolvedValue({ type: 'success' });
+
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
   });
 
@@ -75,7 +97,7 @@ describe('buyNow', () => {
 
     await expect(resultPromise).resolves.toEqual({ status: 'cancelled' });
     expect(mockInvoke).not.toHaveBeenCalled();
-    expect(mockOpenURL).not.toHaveBeenCalled();
+    expect(mockOpenAuthSessionAsync).not.toHaveBeenCalled();
   });
 
   it('resolves with opened after checkout is created and the browser opens', async () => {
@@ -86,8 +108,6 @@ describe('buyNow', () => {
       },
       error: null,
     });
-    mockCanOpenURL.mockResolvedValue(true);
-    mockOpenURL.mockResolvedValue(undefined);
 
     const resultPromise = buyNow('listing-1', 'Desk Lamp', 40);
 
@@ -95,10 +115,16 @@ describe('buyNow', () => {
 
     await expect(resultPromise).resolves.toEqual({ status: 'opened', sessionId: 'sess-1' });
     expect(mockInvoke).toHaveBeenCalledWith('create-checkout-session', {
-      body: { listing_id: 'listing-1' },
+      body: {
+        listing_id: 'listing-1',
+        success_url: expect.stringContaining('payment-success'),
+        cancel_url: expect.stringContaining('payment-cancel'),
+      },
     });
-    expect(mockCanOpenURL).toHaveBeenCalledWith('https://stripe.test/checkout');
-    expect(mockOpenURL).toHaveBeenCalledWith('https://stripe.test/checkout');
+    expect(mockOpenAuthSessionAsync).toHaveBeenCalledWith(
+      'https://stripe.test/checkout',
+      expect.any(String),
+    );
   });
 
   it('resolves with failed and shows an error when checkout session creation fails', async () => {
@@ -119,18 +145,15 @@ describe('buyNow', () => {
 
     expect(result.error.message).toBe('Failed to create checkout session');
     expect(mockAlert).toHaveBeenCalledWith('Payment Error', 'Failed to create checkout session');
+    expect(mockOpenAuthSessionAsync).not.toHaveBeenCalled();
     expect(consoleErrorSpy).toHaveBeenCalled();
   });
 
-  it('resolves with failed and shows an error when checkout cannot be opened', async () => {
+  it('resolves with failed when Stripe returns no checkout URL', async () => {
     mockInvoke.mockResolvedValue({
-      data: {
-        url: 'https://stripe.test/checkout',
-        session_id: 'sess-1',
-      },
+      data: { session_id: 'sess-1' },
       error: null,
     });
-    mockCanOpenURL.mockResolvedValue(false);
 
     const resultPromise = buyNow('listing-1', 'Desk Lamp', 40);
 
@@ -142,8 +165,8 @@ describe('buyNow', () => {
       throw new Error('Expected a failed buy result');
     }
 
-    expect(result.error.message).toBe('Unable to open checkout page');
-    expect(mockAlert).toHaveBeenCalledWith('Payment Error', 'Unable to open checkout page');
-    expect(mockOpenURL).not.toHaveBeenCalled();
+    expect(result.error.message).toBe('No checkout URL returned');
+    expect(mockAlert).toHaveBeenCalledWith('Payment Error', 'No checkout URL returned');
+    expect(mockOpenAuthSessionAsync).not.toHaveBeenCalled();
   });
 });

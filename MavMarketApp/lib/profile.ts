@@ -77,7 +77,7 @@ async function fetchSellerListings(
       id, title, price, image_url, category, condition, description,
       created_at, seller_id, pickup_location_name, pickup_location_address,
       is_on_campus, status,
-      seller:users(name, avatar_url, rating)
+      seller:users!listings_seller_id_fkey(name, avatar_url, rating)
     `)
     .eq("seller_id", sellerId);
 

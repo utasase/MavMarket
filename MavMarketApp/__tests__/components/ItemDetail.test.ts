@@ -12,7 +12,7 @@ jest.mock('react-native', () => {
   });
 });
 
-import { ActivityIndicator, Text, TouchableOpacity } from 'react-native';
+import { ActivityIndicator, Text } from 'react-native';
 
 const mockPush = jest.fn();
 const mockCreateConversation = jest.fn();
@@ -49,28 +49,21 @@ jest.mock('../../lib/payments', () => ({
   calculateTotal: jest.fn((price: number) => price),
 }));
 
-jest.mock('../../lib/ThemeContext', () => ({
-  useTheme: () => ({
-    theme: {
-      colors: {
-        background: '#000000',
-        textPrimary: '#ffffff',
-        accent: '#ff5500',
-        surface: '#111111',
-        borderLight: '#222222',
-        textTertiary: '#999999',
-        textSecondary: '#cccccc',
-        border: '#333333',
-        surfaceElevated: '#1a1a1a',
-        overlay: 'rgba(0, 0, 0, 0.6)',
-        error: '#ff0000',
-        success: '#00ff00',
-        warning: '#ffaa00',
-        star: '#ffd700',
-      },
-    },
-  }),
-}));
+jest.mock('../../lib/ThemeContext', () => {
+  const { darkTheme } = require('../../lib/theme');
+  return {
+    useTheme: () => ({ theme: darkTheme, isDark: true, toggleTheme: jest.fn() }),
+  };
+});
+
+jest.mock('expo-linear-gradient', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return {
+    LinearGradient: ({ children, ...rest }: any) =>
+      React.createElement(View, rest, children),
+  };
+});
 
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
@@ -90,13 +83,12 @@ jest.mock('../../components/ReviewsViewer', () => ({
 
 jest.mock('lucide-react-native', () => {
   const makeIcon = () => () => null;
-  return {
-    ChevronLeft: makeIcon(),
-    Heart: makeIcon(),
-    Flag: makeIcon(),
-    Star: makeIcon(),
-    ShoppingCart: makeIcon(),
-  };
+  return new Proxy(
+    {},
+    {
+      get: () => makeIcon(),
+    }
+  );
 });
 
 import { ItemDetail } from '../../components/ItemDetail';
@@ -119,27 +111,43 @@ function touchableHasText(node: TestRenderer.ReactTestInstance, label: string) {
   return node.findAllByType(Text).some((textNode) => flattenText(textNode.props.children) === label);
 }
 
+function allPressables(renderer: TestRenderer.ReactTestRenderer) {
+  return renderer.root.findAll(
+    (node) =>
+      typeof node.props?.onPress === 'function' ||
+      node.props?.accessibilityRole === 'button',
+  );
+}
+
 function findTouchableByText(renderer: TestRenderer.ReactTestRenderer, label: string) {
-  const match = renderer.root
-    .findAllByType(TouchableOpacity)
-    .find((node) => touchableHasText(node, label));
+  const match = allPressables(renderer).find((node) => {
+    try {
+      return touchableHasText(node, label);
+    } catch {
+      return false;
+    }
+  });
 
   if (!match) {
-    throw new Error(`TouchableOpacity with label "${label}" not found`);
+    throw new Error(`Pressable with label "${label}" not found`);
   }
 
   return match;
 }
 
 function findTouchableByTextContaining(renderer: TestRenderer.ReactTestRenderer, labelPart: string) {
-  const match = renderer.root
-    .findAllByType(TouchableOpacity)
-    .find((node) =>
-      node.findAllByType(Text).some((textNode) => flattenText(textNode.props.children).includes(labelPart)),
-    );
+  const match = allPressables(renderer).find((node) => {
+    try {
+      return node
+        .findAllByType(Text)
+        .some((textNode) => flattenText(textNode.props.children).includes(labelPart));
+    } catch {
+      return false;
+    }
+  });
 
   if (!match) {
-    throw new Error(`TouchableOpacity containing "${labelPart}" not found`);
+    throw new Error(`Pressable containing "${labelPart}" not found`);
   }
 
   return match;
@@ -199,7 +207,7 @@ describe('ItemDetail interactions', () => {
     const renderer = await renderItemDetail({ onBack });
 
     await act(async () => {
-      findTouchableByText(renderer, 'Message Seller').props.onPress();
+      findTouchableByText(renderer, 'Message').props.onPress();
     });
     await flushAsyncWork();
 
@@ -215,7 +223,7 @@ describe('ItemDetail interactions', () => {
     const renderer = await renderItemDetail({ onBack });
 
     await act(async () => {
-      findTouchableByText(renderer, 'Message Seller').props.onPress();
+      findTouchableByText(renderer, 'Message').props.onPress();
     });
     await flushAsyncWork();
 
@@ -231,7 +239,7 @@ describe('ItemDetail interactions', () => {
     const renderer = await renderItemDetail();
 
     await act(async () => {
-      findTouchableByTextContaining(renderer, 'Buy Now').props.onPress();
+      findTouchableByTextContaining(renderer, 'Buy ·').props.onPress();
     });
 
     expect(mockBuyNow).toHaveBeenCalledWith(item.id, item.title, item.price);
@@ -244,6 +252,6 @@ describe('ItemDetail interactions', () => {
     await flushAsyncWork();
 
     expect(renderer.root.findAllByType(ActivityIndicator)).toHaveLength(0);
-    expect(findTouchableByTextContaining(renderer, 'Buy Now').props.disabled).toBe(false);
+    expect(findTouchableByTextContaining(renderer, 'Buy ·').props.disabled).toBe(false);
   });
 });

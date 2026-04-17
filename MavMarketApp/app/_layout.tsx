@@ -2,33 +2,14 @@ import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, StatusBar } from "react-native";
 import { Slot } from "expo-router";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import Constants from "expo-constants";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SplashScreen } from "../components/SplashScreen";
 import { LoginPage } from "../components/LoginPage";
 import { ThemeProvider, useTheme } from "../lib/ThemeContext";
+import { FontProvider, useFontsLoaded } from "../lib/FontContext";
 import { MavLogo } from "../components/MavLogo";
-import type { AuthContextType } from "../lib/types";
-
-// In Expo Go the native `react-native-auth0` module is unavailable, so we load
-// the expo-auth-session based provider instead. Dev-client / production builds
-// get the native Auth0Provider + useAuth0 path. We check both fields because
-// `appOwnership` is deprecated in favor of `executionEnvironment` in newer SDKs.
-const isExpoGo =
-  Constants.appOwnership === "expo" ||
-  Constants.executionEnvironment === "storeClient";
-
-type AuthModule = {
-  AuthProvider: React.ComponentType<{ children: React.ReactNode }>;
-  useAuth: () => AuthContextType;
-};
-
-const { AuthProvider, useAuth }: AuthModule = isExpoGo
-  ? require("../lib/auth-context.expo")
-  : require("../lib/auth-context");
-
-const Auth0Provider: React.ComponentType<any> = isExpoGo
-  ? ({ children }: { children: React.ReactNode }) => <>{children}</>
-  : require("react-native-auth0").Auth0Provider;
+import { AuthProvider, useAuth } from "../lib/auth-context";
+import { SavedProvider } from "../lib/SavedContext";
 
 function EmailConfirmedScreen({ onDone }: { onDone: () => void }) {
   const { theme } = useTheme();
@@ -44,22 +25,45 @@ function EmailConfirmedScreen({ onDone }: { onDone: () => void }) {
       <View style={[styles.confirmedLogoBox, { shadowColor: c.shadow }]}>
         <MavLogo size={64} />
       </View>
-      <Text style={[styles.confirmedTitle, { color: c.textPrimary }]}>Email confirmed!</Text>
-      <Text style={[styles.confirmedSubtitle, { color: c.textSecondary }]}>Welcome to Mav Market.</Text>
+      <Text
+        style={[
+          styles.confirmedTitle,
+          {
+            color: c.textPrimary,
+            fontFamily: theme.typography.title.fontFamily,
+          },
+        ]}
+      >
+        Email confirmed
+      </Text>
+      <Text
+        style={[
+          styles.confirmedSubtitle,
+          {
+            color: c.textSecondary,
+            fontFamily: theme.typography.body.fontFamily,
+          },
+        ]}
+      >
+        Welcome to Mav Market.
+      </Text>
     </View>
   );
 }
 
 function AppGate() {
-  const { session, loading, justCompletedEmailConfirmation, clearConfirmed } = useAuth();
-  const { theme, isDark } = useTheme();
+  const { session, initializing, justCompletedEmailConfirmation, clearConfirmed } = useAuth();
+  const { isDark } = useTheme();
+  const fontsLoaded = useFontsLoaded();
   const [splashDone, setSplashDone] = useState(false);
 
-  if (!splashDone) {
+  // Hold the splash until fonts are also loaded so the type system is live
+  // on first paint of the Login screen.
+  if (!splashDone || !fontsLoaded) {
     return <SplashScreen onComplete={() => setSplashDone(true)} />;
   }
 
-  if (loading) return null;
+  if (initializing) return null;
 
   if (justCompletedEmailConfirmation && session) {
     return <EmailConfirmedScreen onDone={clearConfirmed} />;
@@ -79,18 +83,19 @@ function AppGate() {
 
 export default function RootLayout() {
   return (
-    <Auth0Provider
-      domain={process.env.EXPO_PUBLIC_AUTH0_DOMAIN!}
-      clientId={process.env.EXPO_PUBLIC_AUTH0_CLIENT_ID!}
-    >
+    <GestureHandlerRootView style={styles.container}>
       <SafeAreaProvider>
-        <ThemeProvider>
-          <AuthProvider>
-            <ThemedRoot />
-          </AuthProvider>
-        </ThemeProvider>
+        <FontProvider>
+          <ThemeProvider>
+            <AuthProvider>
+              <SavedProvider>
+                <ThemedRoot />
+              </SavedProvider>
+            </AuthProvider>
+          </ThemeProvider>
+        </FontProvider>
       </SafeAreaProvider>
-    </Auth0Provider>
+    </GestureHandlerRootView>
   );
 }
 

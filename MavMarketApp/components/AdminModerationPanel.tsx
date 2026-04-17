@@ -10,7 +10,7 @@ import {
   Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ArrowLeft, User, Package, ChevronDown, ChevronUp } from "lucide-react-native";
+import { ArrowLeft, User, Package, ChevronDown, ChevronUp, ShieldCheck } from "lucide-react-native";
 import {
   getOpenReports,
   getReportTargetDetails,
@@ -20,6 +20,10 @@ import {
   type ReportTargetDetails,
 } from "../lib/moderation";
 import { useTheme } from "../lib/ThemeContext";
+import { Badge } from "./ui/Badge";
+import { EmptyState } from "./ui/EmptyState";
+import { IconButton } from "./ui/IconButton";
+import { spacing, radius } from "../lib/theme";
 
 interface Props {
   onBack: () => void;
@@ -64,16 +68,17 @@ export function AdminModerationPanel({ onBack }: Props) {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top, backgroundColor: c.background }]}>
-      <View style={[styles.header, { borderBottomColor: c.borderLight }]}>
-        <TouchableOpacity onPress={onBack} style={styles.backBtn}>
-          <ArrowLeft size={22} color={c.textPrimary} strokeWidth={1.5} />
-        </TouchableOpacity>
-        <Text style={[styles.title, { color: c.textPrimary }]}>Moderation Queue</Text>
-        {reports.length > 0 && (
-          <View style={[styles.countBadge, { backgroundColor: c.error }]}>
-            <Text style={[styles.countText, { color: c.background }]}>{reports.length}</Text>
-          </View>
-        )}
+      <View style={[styles.header, { borderBottomColor: c.hairline }]}>
+        <IconButton
+          icon={<ArrowLeft size={20} color={c.textPrimary} strokeWidth={1.85} />}
+          onPress={onBack}
+          accessibilityLabel="Back"
+          size={40}
+        />
+        <Text style={[styles.title, { color: c.textPrimary, fontFamily: theme.typography.title.fontFamily }]}>Moderation queue</Text>
+        {reports.length > 0 ? (
+          <Badge label={`${reports.length}`} tone="danger" size="sm" />
+        ) : null}
       </View>
 
       {loading ? (
@@ -81,10 +86,11 @@ export function AdminModerationPanel({ onBack }: Props) {
           <ActivityIndicator color={c.accent} />
         </View>
       ) : reports.length === 0 ? (
-        <View style={styles.centered}>
-          <Text style={[styles.emptyTitle, { color: c.textPrimary }]}>All clear</Text>
-          <Text style={[styles.emptySubtext, { color: c.textTertiary }]}>No open reports</Text>
-        </View>
+        <EmptyState
+          icon={<ShieldCheck size={22} color={c.textTertiary} />}
+          title="All clear"
+          description="No open reports in the queue."
+        />
       ) : (
         <ScrollView contentContainerStyle={styles.list}>
           {reports.map((report) => (
@@ -269,14 +275,17 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
-    gap: 8,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: spacing.sm,
   },
-  backBtn: { padding: 4, marginLeft: -4 },
-  title: { flex: 1, fontSize: 18, color: "#111827" },
+  title: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: "700",
+    letterSpacing: -0.2,
+  },
   countBadge: {
     backgroundColor: "#EF4444",
     borderRadius: 10,

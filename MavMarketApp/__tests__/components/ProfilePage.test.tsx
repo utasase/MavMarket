@@ -23,9 +23,18 @@ const mockGetReviews = jest.fn();
 const mockIsCurrentUserAdmin = jest.fn();
 const mockGetSavedListings = jest.fn();
 
+// expo-router pulls in @react-navigation/native which ships ESM; jest can't
+// parse it without extra transform config, so stub the hooks we actually use.
 jest.mock('expo-router', () => ({
   useRouter: () => ({ replace: mockReplace, push: jest.fn() }),
   useLocalSearchParams: () => ({ userId: mockRouteUserId }),
+  useFocusEffect: (cb: () => void | (() => void)) => {
+    const React = require('react');
+    React.useEffect(() => {
+      const cleanup = cb();
+      return typeof cleanup === 'function' ? cleanup : undefined;
+    }, []);
+  },
 }));
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -34,13 +43,12 @@ jest.mock('react-native-safe-area-context', () => ({
 
 jest.mock('lucide-react-native', () => {
   const makeIcon = () => () => null;
-  return {
-    Settings: makeIcon(),
-    ArrowLeft: makeIcon(),
-    Shield: makeIcon(),
-    LayoutGrid: makeIcon(),
-    Star: makeIcon(),
-  };
+  return new Proxy(
+    {},
+    {
+      get: () => makeIcon(),
+    },
+  );
 });
 
 jest.mock('../../lib/auth-context', () => ({
@@ -88,6 +96,18 @@ jest.mock('../../lib/messages', () => ({
 
 jest.mock('../../lib/saved', () => ({
   getSavedListings: (...args: unknown[]) => mockGetSavedListings(...args),
+}));
+
+jest.mock('../../lib/SavedContext', () => ({
+  useSaved: () => ({
+    savedIds: [],
+    savedItems: [],
+    isSaved: () => false,
+    toggleSave: jest.fn(),
+    setSaved: jest.fn(),
+    refresh: jest.fn().mockResolvedValue(undefined),
+  }),
+  SavedProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
 jest.mock('../../components/StarRating', () => ({

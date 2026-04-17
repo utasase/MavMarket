@@ -2,6 +2,15 @@ import { type ListingItem, type Message, type Conversation, type UserProfile, ty
 
 export { type ListingItem, type Message, type Conversation, type UserProfile, type Notification };
 
+/**
+ * Demo mode flag. When EXPO_PUBLIC_DEMO_MODE is "true", the app should
+ * rely exclusively on this mock data instead of hitting Supabase.
+ * Useful for showcasing the swipe flow and feed without backend setup.
+ */
+export const DEMO_MODE =
+  typeof process !== "undefined" &&
+  process.env?.EXPO_PUBLIC_DEMO_MODE === "true";
+
 export const categories = [
   "All",
   "Textbooks",
@@ -14,214 +23,472 @@ export const categories = [
   "Other",
 ];
 
+// Curated avatar URLs (reused across sellers to keep bundle small)
+const AVATAR_MALE_1 =
+  "https://images.unsplash.com/photo-1729697967428-5b98d11486a5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb2xsZWdlJTIwc3R1ZGVudCUyMHBvcnRyYWl0JTIwbWFsZXxlbnwxfHx8fDE3NzE5OTY0MjV8MA&ixlib=rb-4.1.0&q=80&w=1080";
+const AVATAR_MALE_2 =
+  "https://images.unsplash.com/photo-1633332755192-727a05c4013d?auto=format&fit=crop&w=400&q=80";
+const AVATAR_MALE_3 =
+  "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80";
+const AVATAR_FEMALE_1 =
+  "https://images.unsplash.com/photo-1709811240710-cff5f04deb44?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb2xsZWdlJTIwc3R1ZGVudCUyMHBvcnRyYWl0JTIwZmVtYWxlfGVufDF8fHx8MTc3MTk5NjQyNXww&ixlib=rb-4.1.0&q=80&w=1080";
+const AVATAR_FEMALE_2 =
+  "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=400&q=80";
+const AVATAR_FEMALE_3 =
+  "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=400&q=80";
+
+// Common pickup locations used for the demo
+const LOC_UTA_CAMPUS = {
+  name: "University of Texas at Arlington",
+  address: "701 S Nedderman Dr, Arlington, TX 76019",
+  lat: 32.735687,
+  lng: -97.108065,
+  isOnCampus: true,
+};
+const LOC_LIBRARY = {
+  name: "UTA Central Library",
+  address: "702 Planetarium Pl, Arlington, TX 76019",
+  lat: 32.729676,
+  lng: -97.112777,
+  isOnCampus: true,
+};
+const LOC_UC = {
+  name: "UTA University Center",
+  address: "300 W First St, Arlington, TX 76019",
+  lat: 32.732502,
+  lng: -97.111603,
+  isOnCampus: true,
+};
+const LOC_LOFTS = {
+  name: "The Lofts at West Campus",
+  address: "1000 W Mitchell St, Arlington, TX 76013",
+  lat: 32.732145,
+  lng: -97.115234,
+  isOnCampus: false,
+};
+const LOC_ARBOR = {
+  name: "Arbor Apartments",
+  address: "2200 W Park Row Dr, Arlington, TX 76013",
+  lat: 32.729856,
+  lng: -97.118923,
+  isOnCampus: false,
+};
+const LOC_CENTENNIAL = {
+  name: "Centennial Court",
+  address: "700 Kerby St, Arlington, TX 76013",
+  lat: 32.731987,
+  lng: -97.113782,
+  isOnCampus: false,
+};
+
 export const listings: ListingItem[] = [
   {
     id: "1",
     title: "Calculus Textbook (8th Ed.)",
     price: 45,
-    image: "https://images.unsplash.com/photo-1705636070427-8234f647b5bb?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx1c2VkJTIwdGV4dGJvb2slMjBjb2xsZWdlfGVufDF8fHx8MTc3MTk5NjQyMnww&ixlib=rb-4.1.0&q=80&w=1080",
+    image:
+      "https://images.unsplash.com/photo-1705636070427-8234f647b5bb?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx1c2VkJTIwdGV4dGJvb2slMjBjb2xsZWdlfGVufDF8fHx8MTc3MTk5NjQyMnww&ixlib=rb-4.1.0&q=80&w=1080",
     category: "Textbooks",
     sellerName: "Marcus J.",
-    sellerAvatar: "https://images.unsplash.com/photo-1729697967428-5b98d11486a5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb2xsZWdlJTIwc3R1ZGVudCUyMHBvcnRyYWl0JTIwbWFsZXxlbnwxfHx8fDE3NzE5OTY0MjV8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    sellerId: "seller-marcus",
+    sellerAvatar: AVATAR_MALE_1,
     sellerRating: 4.8,
     description: "Barely used calculus textbook, perfect condition. Some highlighting in chapter 3.",
     condition: "Like New",
     postedAt: "2 hours ago",
     isSold: false,
-    pickupLocation: {
-      name: "University of Texas at Arlington",
-      address: "701 S Nedderman Dr, Arlington, TX 76019",
-      lat: 32.735687,
-      lng: -97.108065,
-      isOnCampus: true,
-    },
+    pickupLocation: LOC_UTA_CAMPUS,
   },
   {
     id: "2",
     title: "MacBook Pro 2023",
     price: 899,
-    image: "https://images.unsplash.com/flagged/photo-1576697010739-6373b63f3204?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxsYXB0b3AlMjBjb21wdXRlciUyMGRlc2t8ZW58MXx8fHwxNzcxODg1Mjk1fDA&ixlib=rb-4.1.0&q=80&w=1080",
+    image:
+      "https://images.unsplash.com/flagged/photo-1576697010739-6373b63f3204?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxsYXB0b3AlMjBjb21wdXRlciUyMGRlc2t8ZW58MXx8fHwxNzcxODg1Mjk1fDA&ixlib=rb-4.1.0&q=80&w=1080",
     category: "Electronics",
     sellerName: "Sarah K.",
-    sellerAvatar: "https://images.unsplash.com/photo-1709811240710-cff5f04deb44?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb2xsZWdlJTIwc3R1ZGVudCUyMHBvcnRyYWl0JTIwZmVtYWxlfGVufDF8fHx8MTc3MTk5NjQyNXww&ixlib=rb-4.1.0&q=80&w=1080",
+    sellerId: "seller-sarah",
+    sellerAvatar: AVATAR_FEMALE_1,
     sellerRating: 4.9,
     description: "Selling my MacBook Pro, upgraded to desktop. Comes with charger and case.",
     condition: "Good",
     postedAt: "5 hours ago",
     isSold: false,
-    pickupLocation: {
-      name: "The Lofts at West Campus",
-      address: "1000 W Mitchell St, Arlington, TX 76013",
-      lat: 32.732145,
-      lng: -97.115234,
-      isOnCampus: false,
-    },
+    pickupLocation: LOC_LOFTS,
   },
   {
     id: "3",
     title: "Mountain Bike - Trek",
     price: 275,
-    image: "https://images.unsplash.com/photo-1741676516502-69250deb38ca?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxiaWN5Y2xlJTIwY2FtcHVzJTIwb3V0ZG9vcnxlbnwxfHx8fDE3NzE5OTY0MjN8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    image:
+      "https://images.unsplash.com/photo-1741676516502-69250deb38ca?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxiaWN5Y2xlJTIwY2FtcHVzJTIwb3V0ZG9vcnxlbnwxfHx8fDE3NzE5OTY0MjN8MA&ixlib=rb-4.1.0&q=80&w=1080",
     category: "Sports",
     sellerName: "Jake T.",
-    sellerAvatar: "https://images.unsplash.com/photo-1729697967428-5b98d11486a5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb2xsZWdlJTIwc3R1ZGVudCUyMHBvcnRyYWl0JTIwbWFsZXxlbnwxfHx8fDE3NzE5OTY0MjV8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    sellerId: "seller-jake",
+    sellerAvatar: AVATAR_MALE_1,
     sellerRating: 4.5,
     description: "Great campus bike, recently tuned up. Perfect for getting around UTA.",
     condition: "Good",
     postedAt: "1 day ago",
     isSold: false,
-    pickupLocation: {
-      name: "University of Texas at Arlington",
-      address: "701 S Nedderman Dr, Arlington, TX 76019",
-      lat: 32.735687,
-      lng: -97.108065,
-      isOnCampus: true,
-    },
+    pickupLocation: LOC_UTA_CAMPUS,
   },
   {
     id: "4",
     title: "Sony WH-1000XM5 Headphones",
     price: 180,
-    image: "https://images.unsplash.com/photo-1715356434396-4a09652383b0?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxnYW1pbmclMjBoZWFkcGhvbmVzJTIwZWxlY3Ryb25pY3N8ZW58MXx8fHwxNzcxOTczNTg3fDA&ixlib=rb-4.1.0&q=80&w=1080",
+    image:
+      "https://images.unsplash.com/photo-1715356434396-4a09652383b0?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxnYW1pbmclMjBoZWFkcGhvbmVzJTIwZWxlY3Ryb25pY3N8ZW58MXx8fHwxNzcxOTczNTg3fDA&ixlib=rb-4.1.0&q=80&w=1080",
     category: "Electronics",
     sellerName: "Priya M.",
-    sellerAvatar: "https://images.unsplash.com/photo-1709811240710-cff5f04deb44?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb2xsZWdlJTIwc3R1ZGVudCUyMHBvcnRyYWl0JTIwZmVtYWxlfGVufDF8fHx8MTc3MTk5NjQyNXww&ixlib=rb-4.1.0&q=80&w=1080",
+    sellerId: "seller-priya",
+    sellerAvatar: AVATAR_FEMALE_1,
     sellerRating: 5.0,
     description: "Noise-cancelling headphones, amazing for studying in the library.",
     condition: "Like New",
     postedAt: "3 hours ago",
     isSold: false,
-    pickupLocation: {
-      name: "University of Texas at Arlington",
-      address: "701 S Nedderman Dr, Arlington, TX 76019",
-      lat: 32.735687,
-      lng: -97.108065,
-      isOnCampus: true,
-    },
+    pickupLocation: LOC_LIBRARY,
   },
   {
     id: "5",
     title: "LED Desk Lamp",
     price: 25,
-    image: "https://images.unsplash.com/photo-1621447980929-6638614633c8?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxkZXNrJTIwbGFtcCUyMHN0dWR5fGVufDF8fHx8MTc3MTkzNjQ5M3ww&ixlib=rb-4.1.0&q=80&w=1080",
+    image:
+      "https://images.unsplash.com/photo-1621447980929-6638614633c8?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxkZXNrJTIwbGFtcCUyMHN0dWR5fGVufDF8fHx8MTc3MTkzNjQ5M3ww&ixlib=rb-4.1.0&q=80&w=1080",
     category: "Dorm",
     sellerName: "Alex R.",
-    sellerAvatar: "https://images.unsplash.com/photo-1729697967428-5b98d11486a5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb2xsZWdlJTIwc3R1ZGVudCUyMHBvcnRyYWl0JTIwbWFsZXxlbnwxfHx8fDE3NzE5OTY0MjV8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    sellerId: "seller-alex",
+    sellerAvatar: AVATAR_MALE_1,
     sellerRating: 4.2,
     description: "Adjustable LED desk lamp with USB charging port. Multiple brightness settings.",
     condition: "Good",
     postedAt: "6 hours ago",
     isSold: false,
-    pickupLocation: {
-      name: "University of Texas at Arlington",
-      address: "701 S Nedderman Dr, Arlington, TX 76019",
-      lat: 32.735687,
-      lng: -97.108065,
-      isOnCampus: true,
-    },
+    pickupLocation: LOC_UTA_CAMPUS,
   },
   {
     id: "6",
     title: "North Face Backpack",
     price: 55,
-    image: "https://images.unsplash.com/photo-1535982330050-f1c2fb79ff78?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxiYWNrcGFjayUyMHNjaG9vbHxlbnwxfHx8fDE3NzE5OTY0MjN8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    image:
+      "https://images.unsplash.com/photo-1535982330050-f1c2fb79ff78?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxiYWNrcGFjayUyMHNjaG9vbHxlbnwxfHx8fDE3NzE5OTY0MjN8MA&ixlib=rb-4.1.0&q=80&w=1080",
     category: "Clothing",
     sellerName: "Maria L.",
-    sellerAvatar: "https://images.unsplash.com/photo-1709811240710-cff5f04deb44?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb2xsZWdlJTIwc3R1ZGVudCUyMHBvcnRyYWl0JTIwZmVtYWxlfGVufDF8fHx8MTc3MTk5NjQyNXww&ixlib=rb-4.1.0&q=80&w=1080",
+    sellerId: "seller-maria",
+    sellerAvatar: AVATAR_FEMALE_1,
     sellerRating: 4.7,
     description: "Barely used backpack, tons of compartments. Great for heavy textbook days.",
     condition: "Like New",
     postedAt: "1 day ago",
     isSold: false,
-    pickupLocation: {
-      name: "University of Texas at Arlington",
-      address: "701 S Nedderman Dr, Arlington, TX 76019",
-      lat: 32.735687,
-      lng: -97.108065,
-      isOnCampus: true,
-    },
+    pickupLocation: LOC_UTA_CAMPUS,
   },
   {
     id: "7",
     title: "Nike Air Force 1 (Size 10)",
     price: 65,
-    image: "https://images.unsplash.com/photo-1759542890353-35f5568c1c90?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxzbmVha2VycyUyMHNob2VzJTIwY2FzdWFsfGVufDF8fHx8MTc3MTk5NjQyM3ww&ixlib=rb-4.1.0&q=80&w=1080",
+    image:
+      "https://images.unsplash.com/photo-1759542890353-35f5568c1c90?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxzbmVha2VycyUyMHNob2VzJTIwY2FzdWFsfGVufDF8fHx8MTc3MTk5NjQyM3ww&ixlib=rb-4.1.0&q=80&w=1080",
     category: "Clothing",
     sellerName: "Devon W.",
-    sellerAvatar: "https://images.unsplash.com/photo-1729697967428-5b98d11486a5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb2xsZWdlJTIwc3R1ZGVudCUyMHBvcnRyYWl0JTIwbWFsZXxlbnwxfHx8fDE3NzE5OTY0MjV8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    sellerId: "seller-devon",
+    sellerAvatar: AVATAR_MALE_1,
     sellerRating: 4.3,
     description: "Worn a handful of times. Clean and in great shape.",
     condition: "Good",
     postedAt: "4 hours ago",
     isSold: false,
-    pickupLocation: {
-      name: "University of Texas at Arlington",
-      address: "701 S Nedderman Dr, Arlington, TX 76019",
-      lat: 32.735687,
-      lng: -97.108065,
-      isOnCampus: true,
-    },
+    pickupLocation: LOC_UTA_CAMPUS,
   },
   {
     id: "8",
     title: "Acoustic Guitar - Yamaha",
     price: 120,
-    image: "https://images.unsplash.com/photo-1628887067605-5171efd812e3?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxndWl0YXIlMjBhY291c3RpYyUyMGluc3RydW1lbnR8ZW58MXx8fHwxNzcxOTMxNTU1fDA&ixlib=rb-4.1.0&q=80&w=1080",
+    image:
+      "https://images.unsplash.com/photo-1628887067605-5171efd812e3?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxndWl0YXIlMjBhY291c3RpYyUyMGluc3RydW1lbnR8ZW58MXx8fHwxNzcxOTMxNTU1fDA&ixlib=rb-4.1.0&q=80&w=1080",
     category: "Music",
     sellerName: "Chris B.",
-    sellerAvatar: "https://images.unsplash.com/photo-1729697967428-5b98d11486a5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb2xsZWdlJTIwc3R1ZGVudCUyMHBvcnRyYWl0JTIwbWFsZXxlbnwxfHx8fDE3NzE5OTY0MjV8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    sellerId: "seller-chris",
+    sellerAvatar: AVATAR_MALE_1,
     sellerRating: 4.6,
     description: "Great beginner guitar. Comes with a soft case and extra strings.",
     condition: "Good",
     postedAt: "2 days ago",
     isSold: false,
-    pickupLocation: {
-      name: "University of Texas at Arlington",
-      address: "701 S Nedderman Dr, Arlington, TX 76019",
-      lat: 32.735687,
-      lng: -97.108065,
-      isOnCampus: true,
-    },
+    pickupLocation: LOC_UTA_CAMPUS,
   },
   {
     id: "9",
     title: "Mini Fridge - Insignia",
     price: 80,
-    image: "https://images.unsplash.com/photo-1677296860174-5369253e7896?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtaW5pJTIwZnJpZGdlJTIwZG9ybXxlbnwxfHx8fDE3NzE5OTY0MjR8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    image:
+      "https://images.unsplash.com/photo-1677296860174-5369253e7896?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtaW5pJTIwZnJpZGdlJTIwZG9ybXxlbnwxfHx8fDE3NzE5OTY0MjR8MA&ixlib=rb-4.1.0&q=80&w=1080",
     category: "Dorm",
     sellerName: "Tina N.",
-    sellerAvatar: "https://images.unsplash.com/photo-1709811240710-cff5f04deb44?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb2xsZWdlJTIwc3R1ZGVudCUyMHBvcnRyYWl0JTIwZmVtYWxlfGVufDF8fHx8MTc3MTk5NjQyNXww&ixlib=rb-4.1.0&q=80&w=1080",
+    sellerId: "seller-tina",
+    sellerAvatar: AVATAR_FEMALE_1,
     sellerRating: 4.4,
     description: "Perfect dorm fridge, works great. Moving off-campus so no longer needed.",
     condition: "Good",
     postedAt: "12 hours ago",
-    pickupLocation: {
-      name: "Arbor Apartments",
-      address: "2200 W Park Row Dr, Arlington, TX 76013",
-      lat: 32.729856,
-      lng: -97.118923,
-      isOnCampus: false,
-    },
+    isSold: false,
+    pickupLocation: LOC_ARBOR,
   },
   {
     id: "10",
     title: "TI-84 Plus Calculator",
     price: 60,
-    image: "https://images.unsplash.com/photo-1675242314995-034d11bac319?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjYWxjdWxhdG9yJTIwc2NpZW50aWZpY3xlbnwxfHx8fDE3NzE5OTA3NDV8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    image:
+      "https://images.unsplash.com/photo-1675242314995-034d11bac319?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjYWxjdWxhdG9yJTIwc2NpZW50aWZpY3xlbnwxfHx8fDE3NzE5OTA3NDV8MA&ixlib=rb-4.1.0&q=80&w=1080",
     category: "Electronics",
     sellerName: "Marcus J.",
-    sellerAvatar: "https://images.unsplash.com/photo-1729697967428-5b98d11486a5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb2xsZWdlJTIwc3R1ZGVudCUyMHBvcnRyYWl0JTIwbWFsZXxlbnwxfHx8fDE3NzE5OTY0MjV8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    sellerId: "seller-marcus",
+    sellerAvatar: AVATAR_MALE_1,
     sellerRating: 4.8,
     description: "Used for one semester of statistics. Works perfectly, includes cover.",
     condition: "Like New",
     postedAt: "8 hours ago",
-    pickupLocation: {
-      name: "University of Texas at Arlington",
-      address: "701 S Nedderman Dr, Arlington, TX 76019",
-      lat: 32.735687,
-      lng: -97.108065,
-      isOnCampus: true,
-    },
+    isSold: false,
+    pickupLocation: LOC_UTA_CAMPUS,
+  },
+  {
+    id: "11",
+    title: "IKEA Desk - White",
+    price: 40,
+    image:
+      "https://images.unsplash.com/photo-1518455027359-f3f8164ba6bd?auto=format&fit=crop&w=1080&q=80",
+    category: "Furniture",
+    sellerName: "Emily R.",
+    sellerId: "seller-emily",
+    sellerAvatar: AVATAR_FEMALE_2,
+    sellerRating: 4.6,
+    description: "Compact IKEA Linnmon desk. Easy to disassemble for transport. No scratches.",
+    condition: "Good",
+    postedAt: "7 hours ago",
+    isSold: false,
+    pickupLocation: LOC_CENTENNIAL,
+  },
+  {
+    id: "12",
+    title: "Organic Chemistry (Klein, 4th Ed.)",
+    price: 70,
+    image:
+      "https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&w=1080&q=80",
+    category: "Textbooks",
+    sellerName: "Noah P.",
+    sellerId: "seller-noah",
+    sellerAvatar: AVATAR_MALE_2,
+    sellerRating: 4.7,
+    description: "Pre-med survival kit. Minimal notes, binding intact. Hit me up with offers.",
+    condition: "Good",
+    postedAt: "10 hours ago",
+    isSold: false,
+    pickupLocation: LOC_LIBRARY,
+  },
+  {
+    id: "13",
+    title: "iPad Air (5th Gen) + Apple Pencil",
+    price: 450,
+    image:
+      "https://images.unsplash.com/photo-1557825835-70d97c4aa567?auto=format&fit=crop&w=1080&q=80",
+    category: "Electronics",
+    sellerName: "Aaliyah D.",
+    sellerId: "seller-aaliyah",
+    sellerAvatar: AVATAR_FEMALE_3,
+    sellerRating: 4.9,
+    description: "64GB Wi-Fi iPad Air, space gray. Includes 2nd-gen Apple Pencil and folio case.",
+    condition: "Like New",
+    postedAt: "1 hour ago",
+    isSold: false,
+    pickupLocation: LOC_UC,
+  },
+  {
+    id: "14",
+    title: "Futon Couch - Gray",
+    price: 110,
+    image:
+      "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=1080&q=80",
+    category: "Furniture",
+    sellerName: "Kevin L.",
+    sellerId: "seller-kevin",
+    sellerAvatar: AVATAR_MALE_3,
+    sellerRating: 4.4,
+    description: "Comfy convertible futon. Folds flat for a twin bed. Pickup only — heavy!",
+    condition: "Good",
+    postedAt: "2 days ago",
+    isSold: false,
+    pickupLocation: LOC_ARBOR,
+  },
+  {
+    id: "15",
+    title: "Yoga Mat + Block Set",
+    price: 18,
+    image:
+      "https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=1080&q=80",
+    category: "Sports",
+    sellerName: "Ava S.",
+    sellerId: "seller-ava",
+    sellerAvatar: AVATAR_FEMALE_2,
+    sellerRating: 4.8,
+    description: "6mm thick non-slip yoga mat with two cork blocks. Cleaned and ready to go.",
+    condition: "Good",
+    postedAt: "9 hours ago",
+    isSold: false,
+    pickupLocation: LOC_UTA_CAMPUS,
+  },
+  {
+    id: "16",
+    title: "Mechanical Keyboard - Keychron K2",
+    price: 75,
+    image:
+      "https://images.unsplash.com/photo-1587829741301-dc798b83add3?auto=format&fit=crop&w=1080&q=80",
+    category: "Electronics",
+    sellerName: "Ryan C.",
+    sellerId: "seller-ryan",
+    sellerAvatar: AVATAR_MALE_2,
+    sellerRating: 4.6,
+    description: "Wireless/wired mechanical keyboard, brown switches. White backlight. Great typing feel.",
+    condition: "Like New",
+    postedAt: "5 hours ago",
+    isSold: false,
+    pickupLocation: LOC_LIBRARY,
+  },
+  {
+    id: "17",
+    title: "Standing Floor Mirror",
+    price: 32,
+    image:
+      "https://images.unsplash.com/photo-1618220179428-22790b461013?auto=format&fit=crop&w=1080&q=80",
+    category: "Dorm",
+    sellerName: "Madison H.",
+    sellerId: "seller-madison",
+    sellerAvatar: AVATAR_FEMALE_3,
+    sellerRating: 4.5,
+    description: "Full-length mirror, perfect for a dorm. No cracks. Moving out — must go.",
+    condition: "Good",
+    postedAt: "14 hours ago",
+    isSold: false,
+    pickupLocation: LOC_CENTENNIAL,
+  },
+  {
+    id: "18",
+    title: "Vintage Denim Jacket (M)",
+    price: 28,
+    image:
+      "https://images.unsplash.com/photo-1551488831-00ddcb6c6bd3?auto=format&fit=crop&w=1080&q=80",
+    category: "Clothing",
+    sellerName: "Zoe M.",
+    sellerId: "seller-zoe",
+    sellerAvatar: AVATAR_FEMALE_2,
+    sellerRating: 4.7,
+    description: "Classic Levi's denim jacket, size Medium. Light wear, great for fall.",
+    condition: "Good",
+    postedAt: "1 day ago",
+    isSold: false,
+    pickupLocation: LOC_UC,
+  },
+  {
+    id: "19",
+    title: "Nintendo Switch OLED",
+    price: 240,
+    image:
+      "https://images.unsplash.com/photo-1578303512597-81e6cc155b3e?auto=format&fit=crop&w=1080&q=80",
+    category: "Electronics",
+    sellerName: "Ethan V.",
+    sellerId: "seller-ethan",
+    sellerAvatar: AVATAR_MALE_3,
+    sellerRating: 4.9,
+    description: "Switch OLED with dock, two Joy-Cons, and a carrying case. Lightly used.",
+    condition: "Like New",
+    postedAt: "3 hours ago",
+    isSold: false,
+    pickupLocation: LOC_LOFTS,
+  },
+  {
+    id: "20",
+    title: "Basketball - Spalding",
+    price: 15,
+    image:
+      "https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=1080&q=80",
+    category: "Sports",
+    sellerName: "Jalen W.",
+    sellerId: "seller-jalen",
+    sellerAvatar: AVATAR_MALE_2,
+    sellerRating: 4.3,
+    description: "Official size indoor/outdoor Spalding basketball. Lightly used.",
+    condition: "Good",
+    postedAt: "6 hours ago",
+    isSold: false,
+    pickupLocation: LOC_UTA_CAMPUS,
+  },
+  {
+    id: "21",
+    title: "Keurig K-Mini Coffee Maker",
+    price: 35,
+    image:
+      "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=1080&q=80",
+    category: "Dorm",
+    sellerName: "Olivia B.",
+    sellerId: "seller-olivia",
+    sellerAvatar: AVATAR_FEMALE_3,
+    sellerRating: 4.6,
+    description: "Single-serve K-cup brewer. Descaled and cleaned. Perfect for dorm life.",
+    condition: "Good",
+    postedAt: "20 hours ago",
+    isSold: false,
+    pickupLocation: LOC_ARBOR,
+  },
+  {
+    id: "22",
+    title: "MIDI Controller - Akai MPK Mini",
+    price: 55,
+    image:
+      "https://images.unsplash.com/photo-1511379938547-c1f69419868d?auto=format&fit=crop&w=1080&q=80",
+    category: "Music",
+    sellerName: "Malik J.",
+    sellerId: "seller-malik",
+    sellerAvatar: AVATAR_MALE_3,
+    sellerRating: 4.7,
+    description: "25-key USB MIDI keyboard with drum pads. Great for beat-making in the dorm.",
+    condition: "Like New",
+    postedAt: "11 hours ago",
+    isSold: false,
+    pickupLocation: LOC_LIBRARY,
+  },
+  {
+    id: "23",
+    title: "Intro to Psychology (Myers, 13th Ed.)",
+    price: 38,
+    image:
+      "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&w=1080&q=80",
+    category: "Textbooks",
+    sellerName: "Grace T.",
+    sellerId: "seller-grace",
+    sellerAvatar: AVATAR_FEMALE_2,
+    sellerRating: 4.5,
+    description: "Used for PSYC 1315 last semester. No rips, minor highlighting.",
+    condition: "Good",
+    postedAt: "1 day ago",
+    isSold: false,
+    pickupLocation: LOC_UTA_CAMPUS,
+  },
+  {
+    id: "24",
+    title: "Monitor - Dell 27\" 1440p",
+    price: 165,
+    image:
+      "https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?auto=format&fit=crop&w=1080&q=80",
+    category: "Electronics",
+    sellerName: "Hassan A.",
+    sellerId: "seller-hassan",
+    sellerAvatar: AVATAR_MALE_2,
+    sellerRating: 4.8,
+    description: "Dell S2721DGF 27-inch QHD 165Hz monitor. HDMI + DisplayPort cables included.",
+    condition: "Like New",
+    postedAt: "2 hours ago",
+    isSold: false,
+    pickupLocation: LOC_LOFTS,
   },
 ];
 
@@ -229,12 +496,13 @@ export const conversations: Conversation[] = [
   {
     id: "c1",
     contactName: "Sarah K.",
-    contactAvatar: "https://images.unsplash.com/photo-1709811240710-cff5f04deb44?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb2xsZWdlJTIwc3R1ZGVudCUyMHBvcnRyYWl0JTIwZmVtYWxlfGVufDF8fHx8MTc3MTk5NjQyNXww&ixlib=rb-4.1.0&q=80&w=1080",
+    contactAvatar: AVATAR_FEMALE_1,
     lastMessage: "Can you do $800?",
     lastMessageTime: "2m ago",
     unread: 2,
     itemTitle: "MacBook Pro 2023",
-    itemImage: "https://images.unsplash.com/flagged/photo-1576697010739-6373b63f3204?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxsYXB0b3AlMjBjb21wdXRlciUyMGRlc2t8ZW58MXx8fHwxNzcxODg1Mjk1fDA&ixlib=rb-4.1.0&q=80&w=1080",
+    itemImage:
+      "https://images.unsplash.com/flagged/photo-1576697010739-6373b63f3204?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxsYXB0b3AlMjBjb21wdXRlciUyMGRlc2t8ZW58MXx8fHwxNzcxODg1Mjk1fDA&ixlib=rb-4.1.0&q=80&w=1080",
     messages: [
       { id: "m1", senderId: "me", text: "Hey! Is the MacBook still available?", timestamp: "10:30 AM" },
       { id: "m2", senderId: "other", text: "Yes it is! Are you interested?", timestamp: "10:32 AM" },
@@ -246,12 +514,13 @@ export const conversations: Conversation[] = [
   {
     id: "c2",
     contactName: "Jake T.",
-    contactAvatar: "https://images.unsplash.com/photo-1729697967428-5b98d11486a5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb2xsZWdlJTIwc3R1ZGVudCUyMHBvcnRyYWl0JTIwbWFsZXxlbnwxfHx8fDE3NzE5OTY0MjV8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    contactAvatar: AVATAR_MALE_1,
     lastMessage: "Meet at the UC at 3?",
     lastMessageTime: "1h ago",
     unread: 0,
     itemTitle: "Mountain Bike - Trek",
-    itemImage: "https://images.unsplash.com/photo-1741676516502-69250deb38ca?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxiaWN5Y2xlJTIwY2FtcHVzJTIwb3V0ZG9vcnxlbnwxfHx8fDE3NzE5OTY0MjN8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    itemImage:
+      "https://images.unsplash.com/photo-1741676516502-69250deb38ca?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxiaWN5Y2xlJTIwY2FtcHVzJTIwb3V0ZG9vcnxlbnwxfHx8fDE3NzE5OTY0MjN8MA&ixlib=rb-4.1.0&q=80&w=1080",
     messages: [
       { id: "m1", senderId: "other", text: "Hey, interested in the bike?", timestamp: "9:00 AM" },
       { id: "m2", senderId: "me", text: "Yeah! Can I see it today?", timestamp: "9:15 AM" },
@@ -261,12 +530,13 @@ export const conversations: Conversation[] = [
   {
     id: "c3",
     contactName: "Priya M.",
-    contactAvatar: "https://images.unsplash.com/photo-1709811240710-cff5f04deb44?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb2xsZWdlJTIwc3R1ZGVudCUyMHBvcnRyYWl0JTIwZmVtYWxlfGVufDF8fHx8MTc3MTk5NjQyNXww&ixlib=rb-4.1.0&q=80&w=1080",
+    contactAvatar: AVATAR_FEMALE_1,
     lastMessage: "Sounds good, deal!",
     lastMessageTime: "3h ago",
     unread: 1,
     itemTitle: "Sony WH-1000XM5",
-    itemImage: "https://images.unsplash.com/photo-1715356434396-4a09652383b0?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxnYW1pbmclMjBoZWFkcGhvbmVzJTIwZWxlY3Ryb25pY3N8ZW58MXx8fHwxNzcxOTczNTg3fDA&ixlib=rb-4.1.0&q=80&w=1080",
+    itemImage:
+      "https://images.unsplash.com/photo-1715356434396-4a09652383b0?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxnYW1pbmclMjBoZWFkcGhvbmVzJTIwZWxlY3Ryb25pY3N8ZW58MXx8fHwxNzcxOTczNTg3fDA&ixlib=rb-4.1.0&q=80&w=1080",
     messages: [
       { id: "m1", senderId: "me", text: "Hi! Would you take $160 for the headphones?", timestamp: "1:00 PM" },
       { id: "m2", senderId: "other", text: "How about $170? They're basically new.", timestamp: "1:05 PM" },
@@ -274,12 +544,28 @@ export const conversations: Conversation[] = [
       { id: "m4", senderId: "other", text: "Sounds good, deal!", timestamp: "1:12 PM" },
     ],
   },
+  {
+    id: "c4",
+    contactName: "Aaliyah D.",
+    contactAvatar: AVATAR_FEMALE_3,
+    lastMessage: "Can you meet by the UC tomorrow?",
+    lastMessageTime: "4h ago",
+    unread: 0,
+    itemTitle: "iPad Air (5th Gen)",
+    itemImage:
+      "https://images.unsplash.com/photo-1557825835-70d97c4aa567?auto=format&fit=crop&w=1080&q=80",
+    messages: [
+      { id: "m1", senderId: "me", text: "Is the iPad still available? Any scratches?", timestamp: "2:00 PM" },
+      { id: "m2", senderId: "other", text: "Still available, zero scratches. Pencil included.", timestamp: "2:05 PM" },
+      { id: "m3", senderId: "other", text: "Can you meet by the UC tomorrow?", timestamp: "2:07 PM" },
+    ],
+  },
 ];
 
 export const currentUser: UserProfile = {
   id: "me",
   name: "Jordan Rivera",
-  avatar: "https://images.unsplash.com/photo-1729697967428-5b98d11486a5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb2xsZWdlJTIwc3R1ZGVudCUyMHBvcnRyYWl0JTIwbWFsZXxlbnwxfHx8fDE3NzE5OTY0MjV8MA&ixlib=rb-4.1.0&q=80&w=1080",
+  avatar: AVATAR_MALE_1,
   rating: 4.7,
   reviewCount: 23,
   followers: 156,
@@ -294,7 +580,7 @@ export const friends: UserProfile[] = [
   {
     id: "f1",
     name: "Sarah Kim",
-    avatar: "https://images.unsplash.com/photo-1709811240710-cff5f04deb44?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb2xsZWdlJTIwc3R1ZGVudCUyMHBvcnRyYWl0JTIwZmVtYWxlfGVufDF8fHx8MTc3MTk5NjQyNXww&ixlib=rb-4.1.0&q=80&w=1080",
+    avatar: AVATAR_FEMALE_1,
     rating: 4.9,
     reviewCount: 45,
     followers: 234,
@@ -308,7 +594,7 @@ export const friends: UserProfile[] = [
   {
     id: "f2",
     name: "Jake Torres",
-    avatar: "https://images.unsplash.com/photo-1729697967428-5b98d11486a5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb2xsZWdlJTIwc3R1ZGVudCUyMHBvcnRyYWl0JTIwbWFsZXxlbnwxfHx8fDE3NzE5OTY0MjV8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    avatar: AVATAR_MALE_1,
     rating: 4.5,
     reviewCount: 18,
     followers: 98,
@@ -319,12 +605,26 @@ export const friends: UserProfile[] = [
     listings: [],
     isFollowing: true,
   },
+  {
+    id: "f3",
+    name: "Aaliyah Daniels",
+    avatar: AVATAR_FEMALE_3,
+    rating: 4.9,
+    reviewCount: 31,
+    followers: 187,
+    following: 94,
+    bio: "Architecture | Coffee addict",
+    major: "Architecture",
+    year: "Senior",
+    listings: [],
+    isFollowing: false,
+  },
 ];
 
-// Populate currentUser.listings and friends listings after array definition
 currentUser.listings = [listings[0], listings[4], listings[9]];
-friends[0].listings = [listings[1], listings[3]];
-friends[1].listings = [listings[2], listings[6]];
+friends[0].listings = [listings[1], listings[3], listings[12]];
+friends[1].listings = [listings[2], listings[6], listings[19]];
+friends[2].listings = [listings[12], listings[17]];
 
 export const notifications: Notification[] = [
   {
@@ -334,7 +634,7 @@ export const notifications: Notification[] = [
     message: "Sarah Kim started following you",
     timestamp: "2 hours ago",
     read: false,
-    avatar: "https://images.unsplash.com/photo-1709811240710-cff5f04deb44?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb2xsZWdlJTIwc3R1ZGVudCUyMHBvcnRyYWl0JTIwZmVtYWxlfGVufDF8fHx8MTc3MTk5NjQyNXww&ixlib=rb-4.1.0&q=80&w=1080",
+    avatar: AVATAR_FEMALE_1,
   },
   {
     id: "n2",
@@ -343,7 +643,7 @@ export const notifications: Notification[] = [
     message: 'Marcus J. left you a 5-star review: "Great buyer, smooth transaction!"',
     timestamp: "5 hours ago",
     read: false,
-    avatar: "https://images.unsplash.com/photo-1729697967428-5b98d11486a5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb2xsZWdlJTIwc3R1ZGVudCUyMHBvcnRyYWl0JTIwbWFsZXxlbnwxfHx8fDE3NzE5OTY0MjV8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    avatar: AVATAR_MALE_1,
   },
   {
     id: "n3",
@@ -352,7 +652,8 @@ export const notifications: Notification[] = [
     message: "New MacBook Pro listing matches your interests - $899",
     timestamp: "1 day ago",
     read: true,
-    itemImage: "https://images.unsplash.com/flagged/photo-1576697010739-6373b63f3204?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxsYXB0b3AlMjBjb21wdXRlciUyMGRlc2t8ZW58MXx8fHwxNzcxODg1Mjk1fDA&ixlib=rb-4.1.0&q=80&w=1080",
+    itemImage:
+      "https://images.unsplash.com/flagged/photo-1576697010739-6373b63f3204?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxsYXB0b3AlMjBjb21wdXRlciUyMGRlc2t8ZW58MXx8fHwxNzcxODg1Mjk1fDA&ixlib=rb-4.1.0&q=80&w=1080",
   },
   {
     id: "n4",
@@ -369,7 +670,7 @@ export const notifications: Notification[] = [
     message: "Jake Torres started following you",
     timestamp: "2 days ago",
     read: true,
-    avatar: "https://images.unsplash.com/photo-1729697967428-5b98d11486a5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb2xsZWdlJTIwc3R1ZGVudCUyMHBvcnRyYWl0JTIwbWFsZXxlbnwxfHx8fDE3NzE5OTY0MjV8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    avatar: AVATAR_MALE_1,
   },
   {
     id: "n6",
@@ -378,6 +679,7 @@ export const notifications: Notification[] = [
     message: "Sony WH-1000XM5 Headphones listed in Electronics - $180",
     timestamp: "3 days ago",
     read: true,
-    itemImage: "https://images.unsplash.com/photo-1715356434396-4a09652383b0?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxnYW1pbmclMjBoZWFkcGhvbmVzJTIwZWxlY3Ryb25pY3N8ZW58MXx8fHwxNzcxOTczNTg3fDA&ixlib=rb-4.1.0&q=80&w=1080",
+    itemImage:
+      "https://images.unsplash.com/photo-1715356434396-4a09652383b0?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxnYW1pbmclMjBoZWFkcGhvbmVzJTIwZWxlY3Ryb25pY3N8ZW58MXx8fHwxNzcxOTczNTg3fDA&ixlib=rb-4.1.0&q=80&w=1080",
   },
 ];

@@ -40,18 +40,16 @@ describe('getSavedListingIds', () => {
 // saveItem
 // ---------------------------------------------------------------------------
 describe('saveItem', () => {
-  it('resolves void on successful insert', async () => {
+  it('resolves void on successful upsert', async () => {
     mock.mockResolve({ data: null, error: null });
     await expect(saveItem('user-1', 'listing-1')).resolves.toBeUndefined();
-    const insertCall = mock.builder.calls.find(c => c.method === 'insert');
-    expect(insertCall?.args[0]).toMatchObject({ user_id: 'user-1', listing_id: 'listing-1' });
+    const upsertCall = mock.builder.calls.find(c => c.method === 'upsert');
+    expect(upsertCall?.args[0]).toMatchObject({ user_id: 'user-1', listing_id: 'listing-1' });
   });
 
-  it('throws on UNIQUE constraint violation (duplicate save)', async () => {
-    mock.mockResolve(ERR('duplicate key value', '23505'));
-    await expect(saveItem('user-1', 'listing-1')).rejects.toMatchObject({
-      message: 'duplicate key value',
-    });
+  it('silently succeeds when item is already saved (duplicate ignored)', async () => {
+    mock.mockResolve({ data: null, error: null });
+    await expect(saveItem('user-1', 'listing-1')).resolves.toBeUndefined();
   });
 
   it('throws on FK constraint violation (listing does not exist)', async () => {

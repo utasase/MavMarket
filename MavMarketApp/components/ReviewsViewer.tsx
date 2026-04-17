@@ -1,18 +1,21 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
   View,
   Text,
-  TouchableOpacity,
   ScrollView,
-  Image,
   StyleSheet,
   Modal,
   SafeAreaView,
 } from "react-native";
-import { X } from "lucide-react-native";
+import { X, MessageSquare } from "lucide-react-native";
 import { StarRating } from "./StarRating";
 import { type Review } from "../lib/reviews";
+import { type Theme } from "../lib/types";
 import { useTheme } from "../lib/ThemeContext";
+import { Avatar } from "./ui/Avatar";
+import { EmptyState } from "./ui/EmptyState";
+import { IconButton } from "./ui/IconButton";
+import { spacing, radius } from "../lib/theme";
 
 function formatRelativeDate(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -41,6 +44,8 @@ export function ReviewsViewer({
 }: ReviewsViewerProps) {
   const { theme } = useTheme();
   const c = theme.colors;
+  const t = theme.typography;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
 
   return (
     <Modal
@@ -50,54 +55,64 @@ export function ReviewsViewer({
       onRequestClose={onClose}
     >
       <SafeAreaView style={[styles.safeArea, { backgroundColor: c.background }]}>
-        {/* Header */}
-        <View style={[styles.header, { borderBottomColor: c.borderLight }]}>
-          <View>
-            <Text style={[styles.title, { color: c.textPrimary }]}>Reviews</Text>
+        <View style={styles.header}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.kicker}>
+              {sellerName ? sellerName.toUpperCase() : "SELLER"}
+            </Text>
+            <Text style={styles.title}>Reviews</Text>
             <View style={styles.ratingRow}>
-              <StarRating rating={overallRating} size={12} />
-              <Text style={[styles.ratingText, { color: c.textSecondary }]}>
-                {overallRating.toFixed(1)} · {reviews.length} reviews
+              <StarRating rating={overallRating} size={14} showValue={false} />
+              <Text style={styles.ratingText}>
+                {overallRating.toFixed(1)} · {reviews.length} review
+                {reviews.length === 1 ? "" : "s"}
               </Text>
             </View>
           </View>
-          <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-            <X size={22} color={c.textPrimary} strokeWidth={1.5} />
-          </TouchableOpacity>
+          <IconButton
+            icon={<X size={20} color={c.textPrimary} strokeWidth={1.85} />}
+            onPress={onClose}
+            accessibilityLabel="Close reviews"
+            size={40}
+          />
         </View>
 
-        {/* Reviews List */}
-        <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
+        <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
           {reviews.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={[styles.emptyText, { color: c.textTertiary }]}>No reviews yet</Text>
-            </View>
+            <EmptyState
+              icon={<MessageSquare size={22} color={c.textTertiary} />}
+              title="No reviews yet"
+              description="Be the first to leave feedback after a successful pickup."
+            />
           ) : (
             reviews.map((review) => (
-              <View key={review.id} style={[styles.reviewItem, { borderBottomColor: c.borderLight }]}>
+              <View key={review.id} style={styles.reviewItem}>
                 <View style={styles.reviewRow}>
-                  <Image
-                    source={{
-                      uri:
-                        review.reviewer?.avatar_url ??
-                        `https://api.dicebear.com/7.x/avataaars/svg?seed=${review.reviewer_id}`,
-                    }}
-                    style={styles.avatar}
+                  <Avatar
+                    source={review.reviewer?.avatar_url ?? ""}
+                    name={review.reviewer?.name ?? "Anonymous"}
+                    size={40}
                   />
                   <View style={styles.reviewContent}>
                     <View style={styles.reviewMeta}>
-                      <Text style={[styles.reviewerName, { color: c.textPrimary }]}>
+                      <Text style={styles.reviewerName}>
                         {review.reviewer?.name ?? "Anonymous"}
                       </Text>
-                      <Text style={[styles.reviewDate, { color: c.textTertiary }]}>
+                      <Text style={styles.reviewDate}>
                         {formatRelativeDate(review.created_at)}
                       </Text>
                     </View>
                     <View style={styles.reviewStars}>
-                      <StarRating rating={review.rating} size={11} showValue={false} />
+                      <StarRating
+                        rating={review.rating}
+                        size={12}
+                        showValue={false}
+                      />
                     </View>
                     {review.comment ? (
-                      <Text style={[styles.reviewComment, { color: c.textSecondary }]}>{review.comment}</Text>
+                      <Text style={styles.reviewComment}>
+                        {review.comment}
+                      </Text>
                     ) : null}
                   </View>
                 </View>
@@ -110,81 +125,87 @@ export function ReviewsViewer({
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-  title: {
-    fontSize: 18,
-  },
-  ratingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginTop: 4,
-  },
-  ratingText: {
-    fontSize: 14,
-  },
-  closeBtn: {
-    padding: 8,
-    marginRight: -8,
-  },
-  list: {
-    flex: 1,
-  },
-  emptyState: {
-    height: 192,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 16,
-  },
-  emptyText: {
-    fontSize: 14,
-  },
-  reviewItem: {
-    padding: 16,
-    borderBottomWidth: 1,
-  },
-  reviewRow: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-  },
-  reviewContent: {
-    flex: 1,
-    minWidth: 0,
-  },
-  reviewMeta: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  reviewerName: {
-    fontSize: 14,
-    fontWeight: "500",
-  },
-  reviewDate: {
-    fontSize: 12,
-  },
-  reviewStars: {
-    marginTop: 4,
-  },
-  reviewComment: {
-    fontSize: 14,
-    marginTop: 8,
-    lineHeight: 20,
-  },
-});
+function makeStyles(theme: Theme) {
+  const c = theme.colors;
+  const t = theme.typography;
+  return StyleSheet.create({
+    safeArea: {
+      flex: 1,
+    },
+    header: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "flex-start",
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: c.hairline,
+    },
+    kicker: {
+      color: c.textTertiary,
+      fontFamily: t.overline.fontFamily,
+      fontSize: 10,
+      letterSpacing: 1.2,
+      fontWeight: "700",
+      marginBottom: 2,
+    },
+    title: {
+      color: c.textPrimary,
+      fontFamily: t.title.fontFamily,
+      fontSize: 22,
+      fontWeight: "700",
+      letterSpacing: -0.3,
+    },
+    ratingRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
+      marginTop: spacing.xs,
+    },
+    ratingText: {
+      color: c.textSecondary,
+      fontFamily: t.caption.fontFamily,
+      fontSize: 12,
+    },
+    reviewItem: {
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.lg,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: c.hairline,
+    },
+    reviewRow: {
+      flexDirection: "row",
+      gap: spacing.md,
+    },
+    reviewContent: {
+      flex: 1,
+      minWidth: 0,
+    },
+    reviewMeta: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    reviewerName: {
+      color: c.textPrimary,
+      fontFamily: t.bodyStrong.fontFamily,
+      fontSize: 14,
+      fontWeight: "600",
+    },
+    reviewDate: {
+      color: c.textTertiary,
+      fontFamily: t.caption.fontFamily,
+      fontSize: 11,
+    },
+    reviewStars: {
+      marginTop: spacing.xs,
+    },
+    reviewComment: {
+      color: c.textSecondary,
+      fontFamily: t.body.fontFamily,
+      fontSize: 14,
+      marginTop: spacing.sm,
+      lineHeight: 20,
+    },
+  });
+}

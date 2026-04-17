@@ -1,140 +1,153 @@
 import React, { useEffect, useRef } from "react";
-import { View, Text, StyleSheet, Dimensions, Animated } from "react-native";
+import { View, Text, StyleSheet, Animated } from "react-native";
 import { MavLogo } from "./MavLogo";
-
-const { width, height } = Dimensions.get("window");
+import { useTheme } from "../lib/ThemeContext";
+import { AuthBackground } from "./ui/AuthBackground";
+import { spacing, radius } from "../lib/theme";
 
 interface SplashScreenProps {
   onComplete: () => void;
 }
 
+/**
+ * Splash sits on top of AuthBackground — the same background LoginPage uses —
+ * so splash → login feels like one continuous surface rather than a cut.
+ * No loading dots. Total animation ~1.6s.
+ */
 export function SplashScreen({ onComplete }: SplashScreenProps) {
-  const logoScale = useRef(new Animated.Value(0.5)).current;
+  const { theme } = useTheme();
+  const c = theme.colors;
+
+  const logoScale = useRef(new Animated.Value(0.86)).current;
   const logoOpacity = useRef(new Animated.Value(0)).current;
-  const nameOpacity = useRef(new Animated.Value(0)).current;
-  const nameY = useRef(new Animated.Value(10)).current;
-  const dotsOpacity = useRef(new Animated.Value(0)).current;
-  const bottomOpacity = useRef(new Animated.Value(0)).current;
-  const dotScales = [
-    useRef(new Animated.Value(1)).current,
-    useRef(new Animated.Value(1)).current,
-    useRef(new Animated.Value(1)).current,
-  ];
+  const wordmarkOpacity = useRef(new Animated.Value(0)).current;
+  const wordmarkY = useRef(new Animated.Value(8)).current;
+  const taglineOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.parallel([
-      Animated.spring(logoScale, { toValue: 1, damping: 15, stiffness: 150, useNativeDriver: true }),
-      Animated.timing(logoOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
+      Animated.spring(logoScale, {
+        toValue: 1,
+        damping: 14,
+        stiffness: 120,
+        useNativeDriver: true,
+      }),
+      Animated.timing(logoOpacity, {
+        toValue: 1,
+        duration: 360,
+        useNativeDriver: true,
+      }),
     ]).start();
 
-    setTimeout(() => {
+    const wordmarkTimer = setTimeout(() => {
       Animated.parallel([
-        Animated.timing(nameOpacity, { toValue: 1, duration: 500, useNativeDriver: true }),
-        Animated.timing(nameY, { toValue: 0, duration: 500, useNativeDriver: true }),
+        Animated.timing(wordmarkOpacity, {
+          toValue: 1,
+          duration: 420,
+          useNativeDriver: true,
+        }),
+        Animated.timing(wordmarkY, {
+          toValue: 0,
+          duration: 420,
+          useNativeDriver: true,
+        }),
       ]).start();
-    }, 300);
+    }, 320);
 
-    setTimeout(() => {
-      Animated.timing(dotsOpacity, { toValue: 1, duration: 400, useNativeDriver: true }).start(() => {
-        dotScales.forEach((scale, i) => {
-          Animated.loop(
-            Animated.sequence([
-              Animated.delay(i * 150),
-              Animated.timing(scale, { toValue: 1.4, duration: 500, useNativeDriver: true }),
-              Animated.timing(scale, { toValue: 1, duration: 500, useNativeDriver: true }),
-            ])
-          ).start();
-        });
-      });
-    }, 600);
+    const taglineTimer = setTimeout(() => {
+      Animated.timing(taglineOpacity, {
+        toValue: 1,
+        duration: 420,
+        useNativeDriver: true,
+      }).start();
+    }, 680);
 
-    setTimeout(() => {
-      Animated.timing(bottomOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
-    }, 800);
+    const done = setTimeout(onComplete, 1600);
+    return () => {
+      clearTimeout(wordmarkTimer);
+      clearTimeout(taglineTimer);
+      clearTimeout(done);
+    };
+  }, [onComplete, logoScale, logoOpacity, wordmarkOpacity, wordmarkY, taglineOpacity]);
 
-    const timer = setTimeout(() => onComplete(), 2200);
-    return () => clearTimeout(timer);
-  }, []);
+  const t = theme.typography;
 
   return (
-    <View style={styles.container}>
-      <Animated.View style={[styles.logoWrapper, { opacity: logoOpacity, transform: [{ scale: logoScale }] }]}>
-        <MavLogo size={96} />
-      </Animated.View>
+    <View style={styles.root}>
+      <AuthBackground />
+      <View style={styles.content}>
+        <Animated.View
+          style={[
+            styles.logoFrame,
+            theme.elevation.level3,
+            {
+              opacity: logoOpacity,
+              transform: [{ scale: logoScale }],
+            },
+          ]}
+        >
+          <MavLogo size={88} />
+        </Animated.View>
 
-      <Animated.View style={[styles.nameContainer, { opacity: nameOpacity, transform: [{ translateY: nameY }] }]}>
-        <Text style={styles.appName}>Mav Market</Text>
-        <Text style={styles.subtitle}>UTA Student Marketplace</Text>
-      </Animated.View>
+        <Animated.View
+          style={{
+            opacity: wordmarkOpacity,
+            transform: [{ translateY: wordmarkY }],
+            alignItems: "center",
+            marginTop: spacing.xl,
+          }}
+        >
+          <Text
+            style={{
+              color: c.textPrimary,
+              fontFamily: t.title.fontFamily,
+              fontSize: 28,
+              lineHeight: 34,
+              letterSpacing: -0.4,
+              fontWeight: "700",
+            }}
+          >
+            Mav Market
+          </Text>
+        </Animated.View>
+      </View>
 
-      <Animated.View style={[styles.dotsContainer, { opacity: dotsOpacity }]}>
-        <View style={styles.dots}>
-          {dotScales.map((scale, i) => (
-            <Animated.View key={i} style={[styles.dot, { transform: [{ scale }] }]} />
-          ))}
-        </View>
-      </Animated.View>
-
-      <Animated.View style={[styles.bottomTextWrapper, { opacity: bottomOpacity }]}>
-        <Text style={styles.bottomText}>University of Texas at Arlington</Text>
-      </Animated.View>
+      <Animated.Text
+        style={[
+          styles.tagline,
+          {
+            opacity: taglineOpacity,
+            color: c.textTertiary,
+            fontFamily: t.label.fontFamily,
+            fontSize: t.label.fontSize,
+            letterSpacing: 0.8,
+          },
+        ]}
+      >
+        UNIVERSITY OF TEXAS AT ARLINGTON
+      </Animated.Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
-    backgroundColor: "#0064B1",
     alignItems: "center",
     justifyContent: "center",
-    width,
-    height,
   },
-  logoWrapper: {
-    width: 96,
-    height: 96,
-    borderRadius: 20,
-    overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  nameContainer: {
-    marginTop: 24,
+  content: {
     alignItems: "center",
+    justifyContent: "center",
   },
-  appName: {
-    color: "#FFFFFF",
-    fontSize: 24,
-    letterSpacing: -0.5,
+  logoFrame: {
+    width: 88,
+    height: 88,
+    borderRadius: radius.xl,
+    overflow: "hidden",
   },
-  subtitle: {
-    color: "rgba(255,255,255,0.5)",
-    fontSize: 12,
-    marginTop: 4,
-  },
-  dotsContainer: {
-    marginTop: 48,
-  },
-  dots: {
-    flexDirection: "row",
-    gap: 6,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "rgba(255,255,255,0.6)",
-  },
-  bottomTextWrapper: {
+  tagline: {
     position: "absolute",
-    bottom: 40,
-  },
-  bottomText: {
-    color: "rgba(255,255,255,0.3)",
-    fontSize: 11,
+    bottom: 48,
   },
 });

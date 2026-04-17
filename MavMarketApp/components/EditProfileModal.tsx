@@ -1,8 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   Modal,
   ScrollView,
@@ -11,14 +10,19 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Dimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { X, Camera } from "lucide-react-native";
-import { type UserProfile } from "../data/mockData";
+import { Camera, ChevronLeft } from "lucide-react-native";
+import { type UserProfile, type Theme } from "../lib/types";
 import { updateUserProfile } from "../lib/profile";
 import { pickAndUploadAvatarImage } from "../lib/storage";
 import { useAuth } from "../lib/auth-context";
 import { useTheme } from "../lib/ThemeContext";
+import { Button } from "./ui/Button";
+import { Field } from "./ui/Field";
+import { IconButton } from "./ui/IconButton";
+import { spacing, radius } from "../lib/theme";
 
 interface Props {
   visible: boolean;
@@ -42,7 +46,6 @@ export function EditProfileModal({ visible, profile, onClose, onSaved }: Props) 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  // Sync fields when profile changes (e.g. after reload)
   React.useEffect(() => {
     setName(profile.name);
     setBio(profile.bio);
@@ -66,8 +69,10 @@ export function EditProfileModal({ visible, profile, onClose, onSaved }: Props) 
 
   const handleSave = async () => {
     if (!user) return;
-    if (!name.trim()) { setError("Name is required."); return; }
-
+    if (!name.trim()) {
+      setError("Name is required.");
+      return;
+    }
     try {
       setSaving(true);
       setError("");
@@ -86,172 +91,284 @@ export function EditProfileModal({ visible, profile, onClose, onSaved }: Props) 
     }
   };
 
+  const styles = useMemo(() => makeStyles(theme), [theme]);
+  const sheetHeight = Dimensions.get("window").height * 0.94;
+
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-      >
-        <View style={[styles.container, { paddingTop: insets.top + 8, backgroundColor: c.background }]}>
-          {/* Header */}
-          <View style={[styles.header, { borderBottomColor: c.borderLight }]}>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-              <X size={22} color={c.textPrimary} strokeWidth={1.5} />
-            </TouchableOpacity>
-            <Text style={[styles.headerTitle, { color: c.textPrimary }]}>Edit Profile</Text>
-            <TouchableOpacity
-              onPress={handleSave}
-              disabled={saving}
-              style={[styles.saveBtn, { backgroundColor: c.accent }, saving && styles.saveBtnDisabled]}
-            >
-              {saving ? (
-                <ActivityIndicator color={c.background} size="small" />
-              ) : (
-                <Text style={[styles.saveBtnText, { color: c.background }]}>Save</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView
-            style={styles.scroll}
-            contentContainerStyle={styles.scrollContent}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      onRequestClose={onClose}
+    >
+      <View style={styles.backdrop}>
+        <KeyboardAvoidingView
+          style={{ flex: 1, justifyContent: "flex-end" }}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          <View
+            style={[
+              styles.sheet,
+              {
+                height: sheetHeight,
+                backgroundColor: c.background,
+                paddingTop: Math.max(insets.top, spacing.lg),
+              },
+            ]}
           >
-            {/* Avatar picker */}
-            <View style={styles.avatarSection}>
-              <TouchableOpacity onPress={handlePickAvatar} disabled={uploadingAvatar} style={styles.avatarWrapper}>
-                {avatarUrl ? (
-                  <Image source={{ uri: avatarUrl }} style={styles.avatar} />
-                ) : (
-                  <View style={[styles.avatar, styles.avatarPlaceholder, { backgroundColor: c.border }]}>
-                    <Text style={[styles.avatarInitial, { color: c.textSecondary }]}>
-                      {name.charAt(0).toUpperCase()}
-                    </Text>
-                  </View>
-                )}
-                <View style={[styles.cameraOverlay, { backgroundColor: c.accent }]}>
-                  {uploadingAvatar ? (
-                    <ActivityIndicator color={c.background} size="small" />
+            <View style={styles.grabberWrap}>
+              <View style={[styles.grabber, { backgroundColor: c.border }]} />
+            </View>
+
+            <View style={styles.header}>
+              <IconButton
+                icon={
+                  <ChevronLeft
+                    size={20}
+                    color={c.textPrimary}
+                    strokeWidth={1.85}
+                  />
+                }
+                onPress={onClose}
+                accessibilityLabel="Close"
+                size={40}
+              />
+              <Text style={styles.headerTitle}>Edit profile</Text>
+              <View style={{ width: 40 }} />
+            </View>
+
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={styles.scrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.avatarSection}>
+                <TouchableOpacity
+                  onPress={handlePickAvatar}
+                  disabled={uploadingAvatar}
+                  style={styles.avatarWrapper}
+                  accessibilityRole="button"
+                  accessibilityLabel="Change photo"
+                >
+                  {avatarUrl ? (
+                    <Image source={{ uri: avatarUrl }} style={styles.avatar} />
                   ) : (
-                    <Camera size={16} color={c.background} strokeWidth={1.5} />
+                    <View
+                      style={[
+                        styles.avatar,
+                        styles.avatarPlaceholder,
+                        { backgroundColor: c.surfaceElevated },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.avatarInitial,
+                          { color: c.textSecondary },
+                        ]}
+                      >
+                        {name.charAt(0).toUpperCase() || "M"}
+                      </Text>
+                    </View>
                   )}
+                  <View
+                    style={[
+                      styles.cameraOverlay,
+                      { backgroundColor: c.accent, borderColor: c.background },
+                    ]}
+                  >
+                    {uploadingAvatar ? (
+                      <ActivityIndicator color="#FFFFFF" size="small" />
+                    ) : (
+                      <Camera size={14} color="#FFFFFF" strokeWidth={2} />
+                    )}
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handlePickAvatar}
+                  disabled={uploadingAvatar}
+                >
+                  <Text style={[styles.changePhotoText, { color: c.accentLight }]}>
+                    {uploadingAvatar ? "Uploading…" : "Change photo"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.fieldsStack}>
+                <Field
+                  label="Name"
+                  value={name}
+                  onChangeText={setName}
+                  maxLength={60}
+                  placeholder="Your name"
+                />
+                <Field
+                  label="Bio"
+                  value={bio}
+                  onChangeText={setBio}
+                  maxLength={160}
+                  multiline
+                  numberOfLines={3}
+                  placeholder="Tell buyers something about yourself"
+                  helper={`${bio.length}/160`}
+                />
+                <Field
+                  label="Major"
+                  value={major}
+                  onChangeText={setMajor}
+                  maxLength={80}
+                  placeholder="e.g. Computer Science"
+                />
+                <Field
+                  label="Year"
+                  value={year}
+                  onChangeText={setYear}
+                  maxLength={40}
+                  placeholder="e.g. Junior"
+                />
+              </View>
+
+              {error ? (
+                <View
+                  style={[
+                    styles.errorBanner,
+                    {
+                      backgroundColor: c.errorSurface,
+                      borderColor: c.error,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.errorBannerText, { color: c.error }]}>
+                    {error}
+                  </Text>
                 </View>
-              </TouchableOpacity>
-              <Text style={[styles.changePhotoText, { color: c.accent }]}>Change Photo</Text>
-            </View>
+              ) : null}
+            </ScrollView>
 
-            {/* Name */}
-            <View style={styles.field}>
-              <Text style={[styles.label, { color: c.textSecondary }]}>Name</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: c.surface, borderColor: c.border, color: c.textPrimary }]}
-                value={name}
-                onChangeText={setName}
-                placeholder="Your name"
-                placeholderTextColor={c.textTertiary}
-                maxLength={60}
+            <View
+              style={[
+                styles.footer,
+                {
+                  paddingBottom: insets.bottom + spacing.md,
+                  borderTopColor: c.hairline,
+                  backgroundColor: c.background,
+                },
+              ]}
+            >
+              <Button
+                label="Save changes"
+                onPress={handleSave}
+                loading={saving}
+                disabled={saving}
+                variant="primary"
+                size="lg"
+                fullWidth
               />
             </View>
-
-            {/* Bio */}
-            <View style={styles.field}>
-              <Text style={[styles.label, { color: c.textSecondary }]}>Bio</Text>
-              <TextInput
-                style={[styles.input, styles.textArea, { backgroundColor: c.surface, borderColor: c.border, color: c.textPrimary }]}
-                value={bio}
-                onChangeText={setBio}
-                placeholder="Tell buyers something about yourself..."
-                placeholderTextColor={c.textTertiary}
-                multiline
-                numberOfLines={3}
-                maxLength={160}
-              />
-            </View>
-
-            {/* Major */}
-            <View style={styles.field}>
-              <Text style={[styles.label, { color: c.textSecondary }]}>Major</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: c.surface, borderColor: c.border, color: c.textPrimary }]}
-                value={major}
-                onChangeText={setMajor}
-                placeholder="e.g. Computer Science"
-                placeholderTextColor={c.textTertiary}
-                maxLength={80}
-              />
-            </View>
-
-            {/* Year */}
-            <View style={styles.field}>
-              <Text style={[styles.label, { color: c.textSecondary }]}>Year</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: c.surface, borderColor: c.border, color: c.textPrimary }]}
-                value={year}
-                onChangeText={setYear}
-                placeholder="e.g. Junior"
-                placeholderTextColor={c.textTertiary}
-                maxLength={40}
-              />
-            </View>
-
-            {error ? <Text style={[styles.errorText, { color: c.error }]}>{error}</Text> : null}
-          </ScrollView>
-        </View>
-      </KeyboardAvoidingView>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }
 
-const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  container: { flex: 1 },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-  },
-  closeBtn: { padding: 4 },
-  headerTitle: { fontSize: 16, fontWeight: "600" },
-  saveBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    minWidth: 60,
-    alignItems: "center",
-  },
-  saveBtnDisabled: { opacity: 0.5 },
-  saveBtnText: { fontSize: 14, fontWeight: "600" },
-  scroll: { flex: 1 },
-  scrollContent: { padding: 24, gap: 20, paddingBottom: 40 },
-  avatarSection: { alignItems: "center", gap: 8 },
-  avatarWrapper: { position: "relative" },
-  avatar: { width: 88, height: 88, borderRadius: 44 },
-  avatarPlaceholder: { justifyContent: "center", alignItems: "center" },
-  avatarInitial: { fontSize: 32 },
-  cameraOverlay: {
-    position: "absolute",
-    bottom: 0,
-    right: 0,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  changePhotoText: { fontSize: 13 },
-  field: { gap: 6 },
-  label: { fontSize: 13, fontWeight: "500" },
-  input: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
-  },
-  textArea: { minHeight: 80, textAlignVertical: "top" },
-  errorText: { fontSize: 13, textAlign: "center" },
-});
+function makeStyles(theme: Theme) {
+  const c = theme.colors;
+  const t = theme.typography;
+  return StyleSheet.create({
+    backdrop: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.55)",
+    },
+    sheet: {
+      borderTopLeftRadius: radius.xxl,
+      borderTopRightRadius: radius.xxl,
+      overflow: "hidden",
+    },
+    grabberWrap: {
+      alignItems: "center",
+      paddingTop: spacing.xs,
+      paddingBottom: spacing.sm,
+    },
+    grabber: {
+      width: 40,
+      height: 4,
+      borderRadius: 2,
+      opacity: 0.6,
+    },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: spacing.md,
+      paddingBottom: spacing.sm,
+    },
+    headerTitle: {
+      color: c.textPrimary,
+      fontFamily: t.headline.fontFamily,
+      fontSize: 17,
+      fontWeight: "700",
+      letterSpacing: -0.2,
+    },
+    scrollContent: {
+      paddingHorizontal: spacing.lg,
+      paddingBottom: spacing.xl,
+      gap: spacing.xl,
+    },
+    avatarSection: {
+      alignItems: "center",
+      gap: spacing.sm,
+      marginTop: spacing.md,
+    },
+    avatarWrapper: {
+      position: "relative",
+    },
+    avatar: {
+      width: 96,
+      height: 96,
+      borderRadius: 48,
+    },
+    avatarPlaceholder: {
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    avatarInitial: {
+      fontFamily: t.title.fontFamily,
+      fontSize: 34,
+      fontWeight: "700",
+    },
+    cameraOverlay: {
+      position: "absolute",
+      bottom: 0,
+      right: 0,
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      borderWidth: 2,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    changePhotoText: {
+      fontFamily: t.label.fontFamily,
+      fontSize: 13,
+      fontWeight: "600",
+    },
+    fieldsStack: {
+      gap: spacing.lg,
+    },
+    errorBanner: {
+      borderWidth: 1,
+      borderRadius: radius.md,
+      padding: spacing.md,
+    },
+    errorBannerText: {
+      fontFamily: t.body.fontFamily,
+      fontSize: 13,
+    },
+    footer: {
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.md,
+      borderTopWidth: StyleSheet.hairlineWidth,
+    },
+  });
+}

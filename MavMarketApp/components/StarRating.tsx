@@ -22,8 +22,9 @@ export function StarRating({ rating, size = 14, showValue = true }: StarRatingPr
           <Star
             key={star}
             size={size}
-            color={filled || half ? "#FACC15" : c.border}
-            fill={filled ? "#FACC15" : half ? "rgba(250,204,21,0.5)" : c.border}
+            color={filled || half ? c.star : c.border}
+            fill={filled ? c.star : half ? "rgba(255,214,10,0.5)" : "transparent"}
+            strokeWidth={1.85}
           />
         );
       })}

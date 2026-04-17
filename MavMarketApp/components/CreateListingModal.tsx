@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -8,18 +8,41 @@ import {
   ScrollView,
   Image,
   StyleSheet,
-  ActivityIndicator,
   Switch,
   KeyboardAvoidingView,
   Platform,
+  Animated,
+  Dimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { X, Camera, ChevronDown } from "lucide-react-native";
-import { categories } from "../data/mockData";
+import {
+  X,
+  Camera,
+  Check,
+  Plus,
+  ChevronLeft,
+  MapPin,
+} from "lucide-react-native";
+import {
+  categories,
+  DEMO_MODE,
+  listings as mockListings,
+} from "../data/mockData";
 import { createListing } from "../lib/listings";
 import { pickAndUploadListingImage } from "../lib/storage";
 import { useAuth } from "../lib/auth-context";
 import { useTheme } from "../lib/ThemeContext";
+import { type Theme } from "../lib/types";
+import { Button } from "./ui/Button";
+import { Field } from "./ui/Field";
+import { Chip } from "./ui/Chip";
+import { Card } from "./ui/Card";
+import { IconButton } from "./ui/IconButton";
+import { spacing, radius } from "../lib/theme";
+import { PickupMap } from "./PickupMap";
+
+const DEMO_PLACEHOLDER_IMAGE =
+  "https://images.unsplash.com/photo-1519125323398-675f0ddb6308?auto=format&fit=crop&w=1080&q=80";
 
 const CONDITIONS = ["New", "Like New", "Good", "Fair"] as const;
 const LISTING_CATEGORIES = categories.filter((c) => c !== "All");
@@ -30,115 +53,42 @@ interface Props {
   onCreated: () => void;
 }
 
-const makeStyles = (c: any) => StyleSheet.create({
-  flex: { flex: 1 },
-  container: { flex: 1, backgroundColor: c.background },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: c.borderLight,
-  },
-  closeBtn: { padding: 4 },
-  headerTitle: { fontSize: 16, color: c.textPrimary, fontWeight: "600" },
-  postBtn: {
-    backgroundColor: "#0064B1",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    minWidth: 60,
-    alignItems: "center",
-  },
-  postBtnDisabled: { opacity: 0.5 },
-  postBtnText: { color: "#FFFFFF", fontSize: 14, fontWeight: "600" },
-  scroll: { flex: 1 },
-  scrollContent: { padding: 16, gap: 20, paddingBottom: 40 },
-  imagePicker: {
-    height: 180,
-    backgroundColor: c.surface,
-    borderWidth: 1,
-    borderColor: c.border,
-    borderRadius: 12,
-    borderStyle: "dashed",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    overflow: "hidden",
-  },
-  imagePreview: { width: "100%", height: "100%" },
-  imagePickerText: { fontSize: 14, color: c.textTertiary },
-  field: { gap: 6 },
-  label: { fontSize: 13, color: c.textSecondary, fontWeight: "500" },
-  input: {
-    backgroundColor: c.surface,
-    borderWidth: 1,
-    borderColor: c.border,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: c.textPrimary,
-  },
-  textArea: { minHeight: 96, textAlignVertical: "top" },
-  picker: {
-    backgroundColor: c.surface,
-    borderWidth: 1,
-    borderColor: c.border,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  pickerValue: { fontSize: 14, color: c.textPrimary },
-  pickerDropdown: {
-    borderWidth: 1,
-    borderColor: c.border,
-    borderRadius: 10,
-    backgroundColor: c.surface,
-    marginTop: 4,
-    overflow: "hidden",
-  },
-  pickerOption: { paddingHorizontal: 14, paddingVertical: 12 },
-  pickerOptionActive: { backgroundColor: c.borderLight },
-  pickerOptionText: { fontSize: 14, color: c.textSecondary },
-  pickerOptionTextActive: { color: c.textPrimary, fontWeight: "500" },
-  toggleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  errorText: { fontSize: 13, color: "#EF4444", textAlign: "center" },
-});
+type Step = 0 | 1 | 2;
+const STEPS: { title: string; helper: string }[] = [
+  { title: "Photos", helper: "Add a clear photo so Mavericks can see what you're selling." },
+  { title: "Details", helper: "What is it, how much, and what shape is it in?" },
+  { title: "Pickup", helper: "Where can the buyer meet you?" },
+];
 
 export function CreateListingModal({ visible, onClose, onCreated }: Props) {
   const { user } = useAuth();
   const { theme } = useTheme();
   const c = theme.colors;
-  const styles = makeStyles(c);
+  const t = theme.typography;
   const insets = useSafeAreaInsets();
 
+  const [step, setStep] = useState<Step>(0);
   const [title, setTitle] = useState("");
   const [price, setPrice] = useState("");
   const [category, setCategory] = useState(LISTING_CATEGORIES[0]);
   const [condition, setCondition] = useState<typeof CONDITIONS[number]>("Good");
   const [description, setDescription] = useState("");
   const [pickupName, setPickupName] = useState("UTA Campus");
-  const [pickupAddress, setPickupAddress] = useState("701 S Nedderman Dr, Arlington, TX 76019");
+  const [pickupAddress, setPickupAddress] = useState(
+    "701 S Nedderman Dr, Arlington, TX 76019"
+  );
   const [isOnCampus, setIsOnCampus] = useState(true);
   const [imageUrl, setImageUrl] = useState("");
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
   const [error, setError] = useState("");
 
-  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
-  const [showConditionPicker, setShowConditionPicker] = useState(false);
+  const successScale = useRef(new Animated.Value(0.5)).current;
+  const successOpacity = useRef(new Animated.Value(0)).current;
 
   const reset = () => {
+    setStep(0);
     setTitle("");
     setPrice("");
     setCategory(LISTING_CATEGORIES[0]);
@@ -149,6 +99,9 @@ export function CreateListingModal({ visible, onClose, onCreated }: Props) {
     setIsOnCampus(true);
     setImageUrl("");
     setError("");
+    setShowSuccess(false);
+    successScale.setValue(0.5);
+    successOpacity.setValue(0);
   };
 
   const handleClose = () => {
@@ -157,11 +110,19 @@ export function CreateListingModal({ visible, onClose, onCreated }: Props) {
   };
 
   const handlePickImage = async () => {
+    if (!user) {
+      setError("Sign in to post a listing.");
+      return;
+    }
     try {
       setUploading(true);
       setError("");
-      const url = await pickAndUploadListingImage(user!.id);
-      if (url) setImageUrl(url);
+      if (DEMO_MODE) {
+        setImageUrl(DEMO_PLACEHOLDER_IMAGE);
+      } else {
+        const url = await pickAndUploadListingImage(user.id);
+        if (url) setImageUrl(url);
+      }
     } catch (err: any) {
       setError(err.message ?? "Failed to upload image.");
     } finally {
@@ -169,31 +130,115 @@ export function CreateListingModal({ visible, onClose, onCreated }: Props) {
     }
   };
 
-  const handleSubmit = async () => {
-    if (!user) return;
+  const validateStep = (s: Step): string | null => {
+    if (s === 0) {
+      if (!imageUrl) return "Add at least one photo.";
+    }
+    if (s === 1) {
+      if (!title.trim()) return "Title is required.";
+      const parsedPrice = parseFloat(price);
+      if (isNaN(parsedPrice) || parsedPrice <= 0)
+        return "Enter a valid price.";
+    }
+    return null;
+  };
+
+  const goNext = () => {
+    const v = validateStep(step);
+    if (v) {
+      setError(v);
+      return;
+    }
     setError("");
+    setStep((step + 1) as Step);
+  };
 
-    if (!title.trim()) { setError("Title is required."); return; }
+  const goBack = () => {
+    setError("");
+    if (step === 0) {
+      handleClose();
+    } else {
+      setStep((step - 1) as Step);
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!user) {
+      setError("Sign in to post a listing.");
+      return;
+    }
+    const v0 = validateStep(0);
+    const v1 = validateStep(1);
+    if (v0) {
+      setStep(0);
+      setError(v0);
+      return;
+    }
+    if (v1) {
+      setStep(1);
+      setError(v1);
+      return;
+    }
+    setError("");
     const parsedPrice = parseFloat(price);
-    if (isNaN(parsedPrice) || parsedPrice <= 0) { setError("Enter a valid price."); return; }
-    if (!imageUrl) { setError("Please add a photo."); return; }
-
     try {
       setSubmitting(true);
-      await createListing({
-        title: title.trim(),
-        price: parsedPrice,
-        category,
-        condition,
-        description: description.trim(),
-        image_url: imageUrl,
-        seller_id: user.id,
-        pickup_location_name: pickupName.trim() || "UTA Campus",
-        pickup_location_address: pickupAddress.trim() || "Arlington, TX",
-        is_on_campus: isOnCampus,
-      });
-      reset();
-      onCreated();
+      if (DEMO_MODE) {
+        mockListings.unshift({
+          id: `demo-${Date.now()}`,
+          title: title.trim(),
+          price: parsedPrice,
+          image: imageUrl || DEMO_PLACEHOLDER_IMAGE,
+          category,
+          condition,
+          description: description.trim(),
+          sellerId: user.id,
+          sellerName: "You",
+          sellerAvatar: "",
+          sellerRating: 5.0,
+          postedAt: "Just now",
+          isSold: false,
+          pickupLocation: {
+            name: pickupName.trim() || "UTA Campus",
+            address: pickupAddress.trim() || "Arlington, TX",
+            lat: 32.735687,
+            lng: -97.108065,
+            isOnCampus,
+          },
+        });
+      } else {
+        await createListing({
+          title: title.trim(),
+          price: parsedPrice,
+          category,
+          condition,
+          description: description.trim(),
+          image_url: imageUrl,
+          seller_id: user.id,
+          pickup_location_name: pickupName.trim() || "UTA Campus",
+          pickup_location_address: pickupAddress.trim() || "Arlington, TX",
+          is_on_campus: isOnCampus,
+        });
+      }
+      // Brief success flash before dismissing.
+      setShowSuccess(true);
+      Animated.parallel([
+        Animated.spring(successScale, {
+          toValue: 1,
+          useNativeDriver: true,
+          speed: 18,
+          bounciness: 12,
+        }),
+        Animated.timing(successOpacity, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+      setTimeout(() => {
+        reset();
+        onCreated();
+      }, 900);
     } catch (err: any) {
       setError(err.message ?? "Failed to create listing.");
     } finally {
@@ -201,185 +246,486 @@ export function CreateListingModal({ visible, onClose, onCreated }: Props) {
     }
   };
 
+  const styles = useMemo(() => makeStyles(theme), [theme]);
+
+  const headerHeight = Math.max(insets.top, spacing.lg);
+  const sheetHeight = Dimensions.get("window").height * 0.92;
+
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-      >
-        <View style={[styles.container, { paddingTop: insets.top + 8 }]}>
-          {/* Header */}
-          <View style={styles.header}>
-            <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
-              <X size={22} color={c.textPrimary} strokeWidth={1.5} />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>New Listing</Text>
-            <TouchableOpacity
-              onPress={handleSubmit}
-              disabled={submitting}
-              style={[styles.postBtn, submitting && styles.postBtnDisabled]}
-            >
-              {submitting ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <Text style={styles.postBtnText}>Post</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView
-            style={styles.scroll}
-            contentContainerStyle={styles.scrollContent}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      onRequestClose={handleClose}
+    >
+      <View style={styles.backdrop}>
+        <KeyboardAvoidingView
+          style={{ flex: 1, justifyContent: "flex-end" }}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          <View
+            style={[
+              styles.sheet,
+              {
+                height: sheetHeight,
+                backgroundColor: c.background,
+                paddingTop: headerHeight,
+              },
+            ]}
           >
-            {/* Image picker */}
-            <TouchableOpacity
-              onPress={handlePickImage}
-              disabled={uploading}
-              style={styles.imagePicker}
+            <View style={styles.grabberWrap}>
+              <View style={[styles.grabber, { backgroundColor: c.border }]} />
+            </View>
+
+            <View style={styles.sheetHeader}>
+              <IconButton
+                icon={
+                  step === 0 ? (
+                    <X size={20} color={c.textPrimary} strokeWidth={1.75} />
+                  ) : (
+                    <ChevronLeft size={20} color={c.textPrimary} strokeWidth={1.75} />
+                  )
+                }
+                onPress={goBack}
+                accessibilityLabel={step === 0 ? "Close" : "Back"}
+                size={40}
+              />
+              <View style={styles.stepDots}>
+                {STEPS.map((_, i) => {
+                  const active = i === step;
+                  const passed = i < step;
+                  return (
+                    <View
+                      key={i}
+                      style={[
+                        styles.stepDot,
+                        {
+                          backgroundColor: active
+                            ? c.accentLight
+                            : passed
+                              ? c.accent200
+                              : c.surface,
+                          width: active ? 24 : 8,
+                          borderColor: c.border,
+                        },
+                      ]}
+                    />
+                  );
+                })}
+              </View>
+              <View style={{ width: 40 }} />
+            </View>
+
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={styles.scrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
             >
-              {imageUrl ? (
-                <Image source={{ uri: imageUrl }} style={styles.imagePreview} resizeMode="cover" />
-              ) : uploading ? (
-                <ActivityIndicator color="#0064B1" />
+              <Text style={styles.stepTitle}>{STEPS[step].title}</Text>
+              <Text style={styles.stepHelper}>{STEPS[step].helper}</Text>
+
+              {step === 0 && (
+                <View style={{ gap: spacing.lg }}>
+                  <TouchableOpacity
+                    onPress={handlePickImage}
+                    disabled={uploading}
+                    activeOpacity={0.85}
+                    style={[
+                      styles.photoBox,
+                      {
+                        backgroundColor: c.surface,
+                        borderColor: imageUrl ? c.border : c.border,
+                      },
+                    ]}
+                  >
+                    {imageUrl ? (
+                      <Image
+                        source={{ uri: imageUrl }}
+                        style={styles.photoPreview}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={styles.photoEmpty}>
+                        <View
+                          style={[
+                            styles.photoIconFrame,
+                            { backgroundColor: c.surfaceElevated },
+                          ]}
+                        >
+                          <Camera size={28} color={c.accentLight} strokeWidth={1.6} />
+                        </View>
+                        <Text style={styles.photoLabel}>
+                          {uploading ? "Uploading…" : "Tap to add a photo"}
+                        </Text>
+                        <Text style={styles.photoHint}>
+                          Square crops look best in the feed.
+                        </Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                  {imageUrl ? (
+                    <Button
+                      label="Replace photo"
+                      onPress={handlePickImage}
+                      variant="secondary"
+                      leftIcon={
+                        <Plus size={16} color={c.textPrimary} strokeWidth={2} />
+                      }
+                      loading={uploading}
+                    />
+                  ) : null}
+                </View>
+              )}
+
+              {step === 1 && (
+                <View style={{ gap: spacing.md }}>
+                  <Field
+                    label="Title"
+                    value={title}
+                    onChangeText={setTitle}
+                    placeholder="What are you selling?"
+                    maxLength={80}
+                  />
+                  <Field
+                    label="Price (USD)"
+                    value={price}
+                    onChangeText={setPrice}
+                    placeholder="0.00"
+                    keyboardType="decimal-pad"
+                  />
+
+                  <Text style={styles.fieldGroupLabel}>Category</Text>
+                  <View style={styles.chipWrap}>
+                    {LISTING_CATEGORIES.map((cat) => (
+                      <Chip
+                        key={cat}
+                        label={cat}
+                        selected={category === cat}
+                        onPress={() => setCategory(cat)}
+                      />
+                    ))}
+                  </View>
+
+                  <Text style={styles.fieldGroupLabel}>Condition</Text>
+                  <View style={styles.chipWrap}>
+                    {CONDITIONS.map((cond) => (
+                      <Chip
+                        key={cond}
+                        label={cond}
+                        selected={condition === cond}
+                        onPress={() => setCondition(cond)}
+                      />
+                    ))}
+                  </View>
+
+                  <Field
+                    label="Description"
+                    value={description}
+                    onChangeText={setDescription}
+                    placeholder="Describe your item..."
+                    multiline
+                    numberOfLines={4}
+                    maxLength={500}
+                  />
+                </View>
+              )}
+
+              {step === 2 && (
+                <View style={{ gap: spacing.md }}>
+                  <Card variant="surface" padding="md">
+                    <View style={styles.toggleRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.toggleLabel}>On-campus pickup</Text>
+                        <Text style={styles.toggleHelper}>
+                          Mavericks-only meetups feel safer.
+                        </Text>
+                      </View>
+                      <Switch
+                        value={isOnCampus}
+                        onValueChange={setIsOnCampus}
+                        trackColor={{ false: c.border, true: c.accent500 }}
+                        thumbColor="#FFFFFF"
+                      />
+                    </View>
+                  </Card>
+                  <Field
+                    label="Pickup location"
+                    value={pickupName}
+                    onChangeText={setPickupName}
+                    placeholder="e.g. UTA Library"
+                    leftIcon={
+                      <MapPin
+                        size={18}
+                        color={c.textSecondary}
+                        strokeWidth={1.75}
+                      />
+                    }
+                  />
+                  <Field
+                    label="Address"
+                    value={pickupAddress}
+                    onChangeText={setPickupAddress}
+                    placeholder="Street, city, ZIP"
+                  />
+                  {pickupName ? (
+                    <PickupMap
+                      location={{
+                        name: pickupName || "UTA Campus",
+                        address: pickupAddress,
+                        lat: 32.735687,
+                        lng: -97.108065,
+                        isOnCampus,
+                      }}
+                    />
+                  ) : null}
+                </View>
+              )}
+
+              {error ? (
+                <View
+                  style={[
+                    styles.errorBanner,
+                    {
+                      backgroundColor: c.errorSurface,
+                      borderColor: c.error,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.errorText, { color: c.error }]}>
+                    {error}
+                  </Text>
+                </View>
+              ) : null}
+            </ScrollView>
+
+            <View
+              style={[
+                styles.footer,
+                {
+                  paddingBottom: insets.bottom + spacing.md,
+                  borderTopColor: c.hairline,
+                  backgroundColor: c.background,
+                },
+              ]}
+            >
+              {step < 2 ? (
+                <Button
+                  label="Continue"
+                  onPress={goNext}
+                  size="lg"
+                  fullWidth
+                  variant="primary"
+                />
               ) : (
-                <>
-                  <Camera size={28} color={c.textTertiary} strokeWidth={1.5} />
-                  <Text style={styles.imagePickerText}>Add Photo</Text>
-                </>
+                <Button
+                  label="Post listing"
+                  onPress={handleSubmit}
+                  size="lg"
+                  fullWidth
+                  variant="primary"
+                  loading={submitting}
+                  disabled={submitting}
+                />
               )}
-            </TouchableOpacity>
-
-            {/* Title */}
-            <View style={styles.field}>
-              <Text style={styles.label}>Title</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="What are you selling?"
-                placeholderTextColor={c.textTertiary}
-                value={title}
-                onChangeText={setTitle}
-                maxLength={80}
-              />
             </View>
 
-            {/* Price */}
-            <View style={styles.field}>
-              <Text style={styles.label}>Price ($)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="0.00"
-                placeholderTextColor={c.textTertiary}
-                value={price}
-                onChangeText={setPrice}
-                keyboardType="decimal-pad"
-              />
-            </View>
-
-            {/* Category */}
-            <View style={styles.field}>
-              <Text style={styles.label}>Category</Text>
-              <TouchableOpacity
-                style={styles.picker}
-                onPress={() => setShowCategoryPicker(!showCategoryPicker)}
+            {showSuccess ? (
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.successOverlay,
+                  {
+                    opacity: successOpacity,
+                    backgroundColor: theme.dark
+                      ? "rgba(10,10,11,0.85)"
+                      : "rgba(255,255,255,0.92)",
+                  },
+                ]}
               >
-                <Text style={styles.pickerValue}>{category}</Text>
-                <ChevronDown size={16} color={c.textSecondary} strokeWidth={1.5} />
-              </TouchableOpacity>
-              {showCategoryPicker && (
-                <View style={styles.pickerDropdown}>
-                  {LISTING_CATEGORIES.map((cat) => (
-                    <TouchableOpacity
-                      key={cat}
-                      style={[styles.pickerOption, category === cat && styles.pickerOptionActive]}
-                      onPress={() => { setCategory(cat); setShowCategoryPicker(false); }}
-                    >
-                      <Text style={[styles.pickerOptionText, category === cat && styles.pickerOptionTextActive]}>
-                        {cat}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-            </View>
-
-            {/* Condition */}
-            <View style={styles.field}>
-              <Text style={styles.label}>Condition</Text>
-              <TouchableOpacity
-                style={styles.picker}
-                onPress={() => setShowConditionPicker(!showConditionPicker)}
-              >
-                <Text style={styles.pickerValue}>{condition}</Text>
-                <ChevronDown size={16} color={c.textSecondary} strokeWidth={1.5} />
-              </TouchableOpacity>
-              {showConditionPicker && (
-                <View style={styles.pickerDropdown}>
-                  {CONDITIONS.map((cond) => (
-                    <TouchableOpacity
-                      key={cond}
-                      style={[styles.pickerOption, condition === cond && styles.pickerOptionActive]}
-                      onPress={() => { setCondition(cond); setShowConditionPicker(false); }}
-                    >
-                      <Text style={[styles.pickerOptionText, condition === cond && styles.pickerOptionTextActive]}>
-                        {cond}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-            </View>
-
-            {/* Description */}
-            <View style={styles.field}>
-              <Text style={styles.label}>Description</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                placeholder="Describe your item..."
-                placeholderTextColor={c.textTertiary}
-                value={description}
-                onChangeText={setDescription}
-                multiline
-                numberOfLines={4}
-                maxLength={500}
-              />
-            </View>
-
-            {/* Pickup location */}
-            <View style={styles.field}>
-              <Text style={styles.label}>Pickup Location</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Location name"
-                placeholderTextColor={c.textTertiary}
-                value={pickupName}
-                onChangeText={setPickupName}
-              />
-              <TextInput
-                style={[styles.input, { marginTop: 8 }]}
-                placeholder="Address"
-                placeholderTextColor={c.textTertiary}
-                value={pickupAddress}
-                onChangeText={setPickupAddress}
-              />
-            </View>
-
-            {/* On Campus toggle */}
-            <View style={styles.toggleRow}>
-              <Text style={styles.label}>On-campus pickup</Text>
-              <Switch
-                value={isOnCampus}
-                onValueChange={setIsOnCampus}
-                trackColor={{ false: c.border, true: "#0064B1" }}
-                thumbColor="#FFFFFF"
-              />
-            </View>
-
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
-          </ScrollView>
-        </View>
-      </KeyboardAvoidingView>
+                <Animated.View
+                  style={[
+                    styles.successBadge,
+                    {
+                      backgroundColor: c.success,
+                      transform: [{ scale: successScale }],
+                    },
+                  ]}
+                >
+                  <Check size={36} color="#FFFFFF" strokeWidth={2.5} />
+                </Animated.View>
+                <Text
+                  style={{
+                    marginTop: spacing.md,
+                    color: c.textPrimary,
+                    fontFamily: t.headline.fontFamily,
+                    fontSize: t.headline.fontSize,
+                    fontWeight: "600",
+                  }}
+                >
+                  Listing posted
+                </Text>
+              </Animated.View>
+            ) : null}
+          </View>
+        </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
+}
+
+function makeStyles(theme: Theme) {
+  const c = theme.colors;
+  const t = theme.typography;
+  return StyleSheet.create({
+    backdrop: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.5)",
+    },
+    sheet: {
+      borderTopLeftRadius: radius.xxl,
+      borderTopRightRadius: radius.xxl,
+      overflow: "hidden",
+    },
+    grabberWrap: {
+      alignItems: "center",
+      paddingTop: spacing.sm,
+    },
+    grabber: {
+      width: 40,
+      height: 5,
+      borderRadius: radius.full,
+    },
+    sheetHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.sm,
+      paddingBottom: spacing.md,
+    },
+    stepDots: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.xs,
+    },
+    stepDot: {
+      height: 8,
+      borderRadius: radius.full,
+      borderWidth: StyleSheet.hairlineWidth,
+    },
+    scrollContent: {
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.md,
+      paddingBottom: spacing.xxxl,
+      gap: spacing.lg,
+    },
+    stepTitle: {
+      color: c.textPrimary,
+      fontFamily: t.title.fontFamily,
+      fontSize: t.title.fontSize,
+      lineHeight: t.title.lineHeight,
+      letterSpacing: t.title.letterSpacing,
+      fontWeight: t.title.fontWeight,
+    },
+    stepHelper: {
+      color: c.textSecondary,
+      fontFamily: t.body.fontFamily,
+      fontSize: t.body.fontSize,
+      lineHeight: t.body.lineHeight,
+    },
+    photoBox: {
+      width: "100%",
+      aspectRatio: 1,
+      borderRadius: radius.xl,
+      borderWidth: 1,
+      borderStyle: "dashed",
+      overflow: "hidden",
+    },
+    photoPreview: { width: "100%", height: "100%" },
+    photoEmpty: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: spacing.sm,
+      padding: spacing.xl,
+    },
+    photoIconFrame: {
+      width: 64,
+      height: 64,
+      borderRadius: radius.full,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: spacing.sm,
+    },
+    photoLabel: {
+      color: c.textPrimary,
+      fontFamily: t.headline.fontFamily,
+      fontSize: t.headline.fontSize,
+      fontWeight: "600",
+    },
+    photoHint: {
+      color: c.textSecondary,
+      fontFamily: t.caption.fontFamily,
+      fontSize: t.caption.fontSize,
+      textAlign: "center",
+    },
+    fieldGroupLabel: {
+      color: c.textSecondary,
+      fontFamily: t.label.fontFamily,
+      fontSize: 12,
+      letterSpacing: 0.1,
+      fontWeight: "500",
+      marginTop: spacing.sm,
+    },
+    chipWrap: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: spacing.sm,
+    },
+    toggleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.md,
+    },
+    toggleLabel: {
+      color: c.textPrimary,
+      fontFamily: t.bodyStrong.fontFamily,
+      fontSize: 15,
+      fontWeight: "600",
+    },
+    toggleHelper: {
+      color: c.textTertiary,
+      fontFamily: t.caption.fontFamily,
+      fontSize: 12,
+      marginTop: 2,
+    },
+    errorBanner: {
+      borderWidth: 1,
+      borderRadius: radius.md,
+      padding: spacing.md,
+    },
+    errorText: {
+      fontFamily: t.body.fontFamily,
+      fontSize: 13,
+      lineHeight: 18,
+    },
+    footer: {
+      borderTopWidth: StyleSheet.hairlineWidth,
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.md,
+    },
+    successOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    successBadge: {
+      width: 96,
+      height: 96,
+      borderRadius: radius.full,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+  });
 }

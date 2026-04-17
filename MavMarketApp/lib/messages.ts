@@ -2,6 +2,7 @@ import { type RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import { createNotification } from "./notifications";
 import { type Message, type Conversation } from "./types";
+import { DEMO_MODE, conversations as mockConversations, listings as mockListings } from "../data/mockData";
 
 export interface DBConversation {
   id: string;
@@ -23,7 +24,54 @@ export interface DBMessage {
   createdAt: string;
 }
 
+// -----------------------------------------------------------------------------
+// Demo-mode in-memory store. When EXPO_PUBLIC_DEMO_MODE=true, every helper in
+// this file reads/writes from here instead of Supabase. This lets the demo run
+// through "open thread, send message, receive reply" without any backend.
+// -----------------------------------------------------------------------------
+
+interface DemoConvoEntry {
+  convo: DBConversation;
+  messages: DBMessage[];
+}
+
+const demoStore = new Map<string, DemoConvoEntry>();
+let demoStoreInitialized = false;
+
+function ensureDemoStore() {
+  if (demoStoreInitialized) return;
+  demoStoreInitialized = true;
+  for (const c of mockConversations) {
+    // Try to resolve a sellerId and listingId from the mock listings so the
+    // demo threads link up with the right seller.
+    const listing = mockListings.find((l) => l.title === c.itemTitle);
+    const convo: DBConversation = {
+      id: c.id,
+      contactName: c.contactName,
+      contactAvatar: c.contactAvatar,
+      contactId: listing?.sellerId ?? `seller-${c.contactName.toLowerCase().replace(/\W+/g, "-")}`,
+      lastMessage: c.lastMessage,
+      lastMessageTime: c.lastMessageTime,
+      unread: c.unread,
+      itemTitle: c.itemTitle,
+      itemImage: c.itemImage,
+      listingId: listing?.id ?? "",
+    };
+    const messages: DBMessage[] = c.messages.map((m) => ({
+      id: m.id,
+      senderId: m.senderId, // "me" or "other" — preserved for layout symmetry
+      text: m.text,
+      createdAt: m.timestamp,
+    }));
+    demoStore.set(c.id, { convo, messages });
+  }
+}
+
 export async function getConversations(userId: string): Promise<DBConversation[]> {
+  if (DEMO_MODE) {
+    ensureDemoStore();
+    return Array.from(demoStore.values()).map((e) => e.convo);
+  }
   const [convResult, readsResult] = await Promise.all([
     supabase
       .from("conversations")
@@ -84,6 +132,12 @@ export async function markConversationRead(
   userId: string,
   conversationId: string
 ): Promise<void> {
+  if (DEMO_MODE) {
+    ensureDemoStore();
+    const entry = demoStore.get(conversationId);
+    if (entry) entry.convo.unread = 0;
+    return;
+  }
   await supabase
     .from("message_reads")
     .upsert(
@@ -97,6 +151,10 @@ export async function markConversationRead(
 }
 
 export async function getMessages(conversationId: string): Promise<DBMessage[]> {
+  if (DEMO_MODE) {
+    ensureDemoStore();
+    return demoStore.get(conversationId)?.messages ?? [];
+  }
   const { data, error } = await supabase
     .from("messages")
     .select("id, sender_id, text, created_at")
@@ -122,6 +180,21 @@ export async function sendMessage(
   senderId: string,
   text: string
 ): Promise<void> {
+  if (DEMO_MODE) {
+    ensureDemoStore();
+    const entry = demoStore.get(conversationId);
+    if (!entry) return;
+    const now = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    entry.messages.push({
+      id: `demo-${Date.now()}`,
+      senderId,
+      text,
+      createdAt: now,
+    });
+    entry.convo.lastMessage = text;
+    entry.convo.lastMessageTime = "Just now";
+    return;
+  }
   // Server-side RPC keeps rate limiting, message insert, audit log, and
   // conversation metadata update inside one transaction.
   const { error } = await supabase.rpc("send_message", {
@@ -174,6 +247,11 @@ export function subscribeToMessages(
   conversationId: string,
   callback: (message: DBMessage) => void
 ): RealtimeChannel {
+  if (DEMO_MODE) {
+    // In demo mode there is no realtime backend; return a stub channel so
+    // callers can .unsubscribe() without blowing up.
+    return { unsubscribe: () => {} } as unknown as RealtimeChannel;
+  }
   return supabase
     .channel(`messages:${conversationId}`)
     .on(
@@ -205,6 +283,31 @@ export async function createConversation(
   buyerId: string,
   sellerId: string
 ): Promise<string> {
+  if (DEMO_MODE) {
+    ensureDemoStore();
+    // Re-use an existing thread for the same listing/seller if one exists.
+    for (const [id, entry] of demoStore) {
+      if (entry.convo.listingId === listingId && entry.convo.contactId === sellerId) {
+        return id;
+      }
+    }
+    const listing = mockListings.find((l) => l.id === listingId);
+    const newId = `demo-convo-${Date.now()}`;
+    const convo: DBConversation = {
+      id: newId,
+      contactName: listing?.sellerName ?? "Seller",
+      contactAvatar: listing?.sellerAvatar ?? "",
+      contactId: sellerId,
+      lastMessage: "",
+      lastMessageTime: "",
+      unread: 0,
+      itemTitle: listing?.title ?? "",
+      itemImage: listing?.image ?? "",
+      listingId,
+    };
+    demoStore.set(newId, { convo, messages: [] });
+    return newId;
+  }
   const { data, error } = await supabase
     .from("conversations")
     .upsert(
@@ -222,6 +325,31 @@ export async function findOrCreateDirectConversation(
   currentUserId: string,
   otherUserId: string
 ): Promise<string> {
+  if (DEMO_MODE) {
+    ensureDemoStore();
+    for (const [id, entry] of demoStore) {
+      if (entry.convo.contactId === otherUserId && !entry.convo.listingId) {
+        return id;
+      }
+    }
+    const newId = `demo-direct-${Date.now()}`;
+    demoStore.set(newId, {
+      convo: {
+        id: newId,
+        contactName: "Direct Message",
+        contactAvatar: "",
+        contactId: otherUserId,
+        lastMessage: "",
+        lastMessageTime: "",
+        unread: 0,
+        itemTitle: "",
+        itemImage: "",
+        listingId: "",
+      },
+      messages: [],
+    });
+    return newId;
+  }
   const { data: existing } = await supabase
     .from("conversations")
     .select("id")

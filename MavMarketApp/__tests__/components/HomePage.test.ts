@@ -48,36 +48,56 @@ jest.mock('../../lib/auth-context', () => ({
   useAuth: () => ({ user: null }),
 }));
 
-jest.mock('../../lib/ThemeContext', () => ({
-  useTheme: () => ({
-    theme: {
-      colors: {
-        background: '#000000',
-        textPrimary: '#ffffff',
-        accent: '#ff5500',
-        surface: '#111111',
-        borderLight: '#222222',
-        textTertiary: '#999999',
-        textSecondary: '#cccccc',
-        border: '#333333',
-        surfaceElevated: '#1a1a1a',
-        overlay: 'rgba(0, 0, 0, 0.6)',
-        error: '#ff0000',
-        success: '#00ff00',
-        warning: '#ffaa00',
-      },
-    },
-  }),
-}));
+jest.mock('../../lib/ThemeContext', () => {
+  const { darkTheme } = require('../../lib/theme');
+  return {
+    useTheme: () => ({ theme: darkTheme, isDark: true, toggleTheme: jest.fn() }),
+  };
+});
+
+jest.mock('expo-linear-gradient', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return {
+    LinearGradient: ({ children, ...rest }: any) =>
+      React.createElement(View, rest, children),
+  };
+});
 
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+}));
+
+// expo-router pulls in @react-navigation/native which ships ESM; jest can't
+// parse it without extra transform config, so stub the hooks we actually use.
+jest.mock('expo-router', () => ({
+  useFocusEffect: (cb: () => void | (() => void)) => {
+    const React = require('react');
+    React.useEffect(() => {
+      const cleanup = cb();
+      return typeof cleanup === 'function' ? cleanup : undefined;
+    }, []);
+  },
+  useRouter: () => ({ push: jest.fn(), replace: jest.fn(), back: jest.fn() }),
+  useLocalSearchParams: () => ({}),
 }));
 
 jest.mock('../../lib/saved', () => ({
   getSavedListingIds: jest.fn(),
   saveItem: jest.fn(),
   unsaveItem: jest.fn(),
+}));
+
+jest.mock('../../lib/SavedContext', () => ({
+  useSaved: () => ({
+    savedIds: [],
+    savedItems: [],
+    isSaved: () => false,
+    toggleSave: jest.fn(),
+    setSaved: jest.fn(),
+    refresh: jest.fn().mockResolvedValue(undefined),
+  }),
+  SavedProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
 jest.mock('../../components/MavLogo', () => ({
@@ -94,13 +114,12 @@ jest.mock('../../components/SettingsPanel', () => ({
 
 jest.mock('lucide-react-native', () => {
   const makeIcon = () => () => null;
-  return {
-    Search: makeIcon(),
-    SlidersHorizontal: makeIcon(),
-    X: makeIcon(),
-    Heart: makeIcon(),
-    Menu: makeIcon(),
-  };
+  return new Proxy(
+    {},
+    {
+      get: () => makeIcon(),
+    }
+  );
 });
 
 import { HomePage } from '../../components/HomePage';
@@ -169,7 +188,7 @@ describe('HomePage listing loading', () => {
     const text = renderText(renderer);
 
     expect(getListingsGrid(renderer).props.data).toEqual([]);
-    expect(text).toContain('No items found');
+    expect(text).toContain('No listings yet');
     expect(text).not.toContain(mockListings[0].title);
   });
 
@@ -181,7 +200,7 @@ describe('HomePage listing loading', () => {
 
     expect(getListingsGrid(renderer).props.data).toEqual(mockListings);
     expect(text).toContain(mockListings[0].title);
-    expect(text).not.toContain('No items found');
+    expect(text).not.toContain('No listings yet');
     expect(consoleErrorSpy).toHaveBeenCalledWith('Listings fetch error:', expect.any(Error));
   });
 
@@ -194,6 +213,6 @@ describe('HomePage listing loading', () => {
     expect(getListingsGrid(renderer).props.data).toEqual(fetchedListings);
     expect(text).toContain(fetchedListings[0].title);
     expect(text).not.toContain(mockListings[0].title);
-    expect(text).not.toContain('No items found');
+    expect(text).not.toContain('No listings yet');
   });
 });

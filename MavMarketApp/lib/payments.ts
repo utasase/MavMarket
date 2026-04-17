@@ -2,6 +2,8 @@ import { supabase } from "./supabase";
 import { Alert } from "react-native";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
+import { router } from "expo-router";
+import { DEMO_MODE } from "../data/mockData";
 
 const PLATFORM_FEE_PERCENT = 0.05; // 5%
 
@@ -102,6 +104,24 @@ export function buyNow(
 ): Promise<BuyNowResult> {
   const fee = calculateServiceFee(price);
   const total = calculateTotal(price);
+
+  // In demo mode we bypass the confirmation Alert entirely and send the
+  // buyer straight to the in-app mock checkout page, which mimics Stripe
+  // and lets us demo the full buy flow without live keys or a backend.
+  if (DEMO_MODE) {
+    router.push({
+      pathname: "/mock-checkout",
+      params: {
+        listingId,
+        title: itemTitle,
+        price: String(price),
+      },
+    });
+    return Promise.resolve({
+      status: "opened",
+      sessionId: `demo-${Date.now()}`,
+    });
+  }
 
   return new Promise((resolve) => {
     Alert.alert(

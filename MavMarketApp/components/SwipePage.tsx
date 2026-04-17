@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useFocusEffect } from "expo-router";
 import {
   View,
   Text,
@@ -9,319 +10,84 @@ import {
   Dimensions,
   PanResponder,
   Animated,
+  Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
-import { X, Heart, RotateCcw, ShoppingBag } from "lucide-react-native";
-import { listings as mockListings, type ListingItem } from "../data/mockData";
+import { LinearGradient } from "expo-linear-gradient";
+import * as Haptics from "expo-haptics";
+import {
+  X,
+  Heart,
+  RotateCcw,
+  ShoppingBag,
+  Sparkles,
+} from "lucide-react-native";
+import {
+  listings as mockListings,
+  DEMO_MODE,
+} from "../data/mockData";
+import { type ListingItem, type Theme } from "../lib/types";
 import { ItemDetail } from "./ItemDetail";
 import { getListings } from "../lib/listings";
 import { HeaderMenu } from "./HeaderMenu";
 import { useTheme } from "../lib/ThemeContext";
+import { useSaved } from "../lib/SavedContext";
+import { Avatar } from "./ui/Avatar";
+import { Button } from "./ui/Button";
+import { EmptyState } from "./ui/EmptyState";
+import { IconButton } from "./ui/IconButton";
+import { spacing, radius } from "../lib/theme";
 
-const { width, height } = Dimensions.get("window");
-const CARD_WIDTH = Math.min(width - 32, 380);
-const CARD_HEIGHT = CARD_WIDTH * (4 / 3);
-const SWIPE_THRESHOLD = 100;
+const { width } = Dimensions.get("window");
+const CARD_WIDTH = Math.min(width - spacing.xl * 2, 380);
+const CARD_HEIGHT = CARD_WIDTH * 1.35;
+const SWIPE_THRESHOLD = 110;
+const TAP_SLOP = 8;
 
-const makeStyles = (c: any) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: c.background,
-  },
-  // Results
-  resultsHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: c.borderLight,
-  },
-  resultsTitle: {
-    fontSize: 18,
-    color: c.textPrimary,
-  },
-  resultsCount: {
-    fontSize: 12,
-    color: c.textTertiary,
-  },
-  resultsList: {
-    padding: 16,
-    gap: 12,
-  },
-  resultItem: {
-    flexDirection: "row",
-    gap: 12,
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: c.borderLight,
-    marginBottom: 12,
-  },
-  resultItemImage: {
-    width: 64,
-    height: 64,
-    borderRadius: 10,
-  },
-  resultItemInfo: {
-    flex: 1,
-    minWidth: 0,
-  },
-  resultItemTitle: {
-    fontSize: 14,
-    color: c.textPrimary,
-  },
-  resultItemPrice: {
-    fontSize: 14,
-    color: c.textPrimary,
-    marginTop: 2,
-  },
-  resultItemSeller: {
-    fontSize: 11,
-    color: c.textTertiary,
-    marginTop: 2,
-  },
-  emptyPicks: {
-    height: 192,
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 8,
-  },
-  emptyPicksText: {
-    fontSize: 14,
-    color: c.textTertiary,
-  },
-  startOverContainer: {
-    padding: 16,
-  },
-  startOverBtn: {
-    backgroundColor: "#0064B1",
-    paddingVertical: 14,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  startOverBtnText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  // Discover
-  discoverHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  discoverTitle: {
-    fontSize: 18,
-    color: c.textPrimary,
-  },
-  likedCountBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "#EFF6FF",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  likedCountText: {
-    fontSize: 14,
-    color: "#0064B1",
-    fontWeight: "600",
-  },
-  swipeArea: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 16,
-  },
-  cardStack: {
-    position: "relative",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  nextCard: {
-    position: "absolute",
-    borderRadius: 20,
-    overflow: "hidden",
-    opacity: 0.4,
-    transform: [{ scale: 0.95 }],
-  },
-  noMoreItems: {
-    alignItems: "center",
-    gap: 12,
-  },
-  noMoreText: {
-    fontSize: 14,
-    color: c.textTertiary,
-  },
-  startOverSmallBtn: {
-    backgroundColor: "#0064B1",
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    borderRadius: 10,
-    marginTop: 4,
-  },
-  startOverSmallText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  actionBtns: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 20,
-    paddingTop: 12,
-    paddingHorizontal: 16,
-  },
-  actionBtnSmall: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: c.border,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: c.surface,
-  },
-  actionBtnLarge: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    borderWidth: 2,
-    borderColor: c.border,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: c.surface,
-  },
-  passBtn: {
-    borderColor: "#FECACA",
-    backgroundColor: "#FFF5F5",
-  },
-  wantBtnAction: {
-    borderColor: "#BFDBFE",
-    backgroundColor: "#EFF6FF",
-  },
-  // Swipe card
-  swipeCard: {
-    position: "absolute",
-    borderRadius: 20,
-    overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  wantLabel: {
-    position: "absolute",
-    top: 32,
-    left: 24,
-    borderWidth: 2,
-    borderColor: "#4ADE80",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    transform: [{ rotate: "-12deg" }],
-  },
-  wantText: {
-    color: "#4ADE80",
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  passLabel: {
-    position: "absolute",
-    top: 32,
-    right: 24,
-    borderWidth: 2,
-    borderColor: "#F87171",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    transform: [{ rotate: "12deg" }],
-  },
-  passText: {
-    color: "#F87171",
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  cardGradient: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 200,
-    backgroundColor: "rgba(0,0,0,0.55)",
-  },
-  cardOverlay: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingBottom: 20,
-    paddingTop: 16,
-    paddingHorizontal: 20,
-  },
-  cardOverlayContent: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-end",
-  },
-  cardItemTitle: {
-    color: "#FFFFFF",
-    fontSize: 18,
-  },
-  cardSellerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginTop: 6,
-  },
-  cardSellerAvatar: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-  },
-  cardSellerName: {
-    color: "rgba(255,255,255,0.7)",
-    fontSize: 12,
-  },
-  cardPriceBadge: {
-    backgroundColor: "rgba(255,255,255,0.2)",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 10,
-  },
-  cardPriceText: {
-    color: "#FFFFFF",
-    fontSize: 18,
-  },
-});
+function triggerHaptic(style: "light" | "medium" | "success") {
+  if (Platform.OS === "web") return;
+  try {
+    if (style === "success") {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } else if (style === "medium") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } else {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  } catch {
+    // ignore
+  }
+}
 
 export function SwipePage() {
   const { theme } = useTheme();
   const c = theme.colors;
-  const styles = makeStyles(c);
+  const insets = useSafeAreaInsets();
+  const { savedIds: savedItems, toggleSave: toggleSavedItem, setSaved, refresh: refreshSaved } = useSaved();
 
   const [allItems, setAllItems] = useState<ListingItem[]>(mockListings);
   const [liked, setLiked] = useState<string[]>([]);
   const [passed, setPassed] = useState<string[]>([]);
-  const [exitDirection, setExitDirection] = useState<"left" | "right" | null>(null);
+  const [exitDirection, setExitDirection] = useState<"left" | "right" | null>(
+    null
+  );
   const [showResults, setShowResults] = useState(false);
   const [selectedItem, setSelectedItem] = useState<ListingItem | null>(null);
-  const [savedItems, setSavedItems] = useState<string[]>([]);
-  const insets = useSafeAreaInsets();
 
   useEffect(() => {
+    if (DEMO_MODE) return;
     getListings()
-      .then((data) => { if (data.length > 0) setAllItems(data); })
+      .then((data) => {
+        if (data.length > 0) setAllItems(data);
+      })
       .catch(() => {});
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshSaved();
+    }, [refreshSaved])
+  );
 
   const availableItems = allItems.filter(
     (item) => !liked.includes(item.id) && !passed.includes(item.id)
@@ -329,21 +95,39 @@ export function SwipePage() {
 
   const currentItem = availableItems[0];
   const nextItem = availableItems[1];
+  const afterNextItem = availableItems[2];
+
+  const persistSave = useCallback(
+    (id: string) => {
+      const item = allItems.find((i) => i.id === id);
+      if (!item) return;
+      setSaved(item, true);
+    },
+    [allItems, setSaved]
+  );
 
   const handleSwipe = (direction: "left" | "right") => {
     if (!currentItem) return;
+    const itemId = currentItem.id;
+    if (direction === "right") {
+      triggerHaptic("success");
+      persistSave(itemId);
+    } else {
+      triggerHaptic("medium");
+    }
     setExitDirection(direction);
     setTimeout(() => {
       if (direction === "right") {
-        setLiked((prev) => [...prev, currentItem.id]);
+        setLiked((prev) => (prev.includes(itemId) ? prev : [...prev, itemId]));
       } else {
-        setPassed((prev) => [...prev, currentItem.id]);
+        setPassed((prev) => (prev.includes(itemId) ? prev : [...prev, itemId]));
       }
       setExitDirection(null);
-    }, 300);
+    }, 240);
   };
 
   const handleUndo = () => {
+    triggerHaptic("light");
     if (passed.length > 0) {
       setPassed((prev) => prev.slice(0, -1));
     } else if (liked.length > 0) {
@@ -359,19 +143,37 @@ export function SwipePage() {
   };
 
   const toggleSave = (id: string) => {
-    setSavedItems((prev) =>
-      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
-    );
+    const item = allItems.find((i) => i.id === id);
+    if (!item) return;
+    toggleSavedItem(item);
   };
+
+  const styles = useMemo(() => makeStyles(theme), [theme]);
 
   // Results screen
   if (showResults || (!currentItem && (liked.length > 0 || passed.length > 0))) {
     const likedItems = allItems.filter((item) => liked.includes(item.id));
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
+      <View
+        style={[
+          styles.container,
+          { paddingTop: insets.top, backgroundColor: c.background },
+        ]}
+      >
         <View style={styles.resultsHeader}>
-          <Text style={styles.resultsTitle}>Your Picks</Text>
-          <Text style={styles.resultsCount}>{likedItems.length} items</Text>
+          <View>
+            <Text style={styles.resultsTitle}>Your picks</Text>
+            <Text style={styles.resultsCount}>
+              {likedItems.length} {likedItems.length === 1 ? "item" : "items"}{" "}
+              saved
+            </Text>
+          </View>
+          <IconButton
+            icon={<RotateCcw size={18} color={c.textPrimary} strokeWidth={1.85} />}
+            onPress={handleReset}
+            accessibilityLabel="Start over"
+            size={40}
+          />
         </View>
         <FlatList
           data={likedItems}
@@ -379,33 +181,57 @@ export function SwipePage() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.resultsList}
           ListEmptyComponent={
-            <View style={styles.emptyPicks}>
-              <Heart size={32} color="#D1D5DB" strokeWidth={1.5} />
-              <Text style={styles.emptyPicksText}>No liked items yet</Text>
-            </View>
+            <EmptyState
+              icon={<Heart size={22} color={c.textTertiary} />}
+              title="No picks yet"
+              description="Swipe right on items you love to build a shortlist."
+            />
           }
           renderItem={({ item }) => (
             <TouchableOpacity
               onPress={() => setSelectedItem(item)}
-              style={styles.resultItem}
-              activeOpacity={0.8}
+              style={[
+                styles.resultItem,
+                theme.elevation.level1,
+                { backgroundColor: c.surface, borderColor: c.hairline },
+              ]}
+              activeOpacity={0.85}
             >
-              <Image source={{ uri: item.image }} style={styles.resultItemImage} />
+              <Image
+                source={{ uri: item.image }}
+                style={styles.resultItemImage}
+              />
               <View style={styles.resultItemInfo}>
-                <Text style={styles.resultItemTitle} numberOfLines={1}>{item.title}</Text>
+                <Text
+                  style={styles.resultItemTitle}
+                  numberOfLines={1}
+                >
+                  {item.title}
+                </Text>
                 <Text style={styles.resultItemPrice}>${item.price}</Text>
-                <Text style={styles.resultItemSeller}>{item.sellerName}</Text>
+                <Text style={styles.resultItemSeller}>
+                  {item.sellerName}
+                </Text>
               </View>
             </TouchableOpacity>
           )}
         />
-        <View style={[styles.startOverContainer, { paddingBottom: insets.bottom + 8 }]}>
-          <TouchableOpacity onPress={handleReset} style={styles.startOverBtn}>
-            <Text style={styles.startOverBtnText}>Start Over</Text>
-          </TouchableOpacity>
+        <View
+          style={[
+            styles.startOverContainer,
+            { paddingBottom: insets.bottom + spacing.sm },
+          ]}
+        >
+          <Button
+            label="Keep discovering"
+            onPress={handleReset}
+            variant="primary"
+            size="lg"
+            fullWidth
+          />
         </View>
 
-        {selectedItem && (
+        {selectedItem ? (
           <View style={StyleSheet.absoluteFillObject}>
             <ItemDetail
               item={selectedItem}
@@ -414,90 +240,173 @@ export function SwipePage() {
               onToggleSave={() => toggleSave(selectedItem.id)}
             />
           </View>
-        )}
+        ) : null}
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
+    <View
+      style={[
+        styles.container,
+        { paddingTop: insets.top, backgroundColor: c.background },
+      ]}
+    >
       <View style={styles.discoverHeader}>
-        <Text style={styles.discoverTitle}>Discover</Text>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <View style={styles.titleWrap}>
+          <Text style={styles.discoverTitle}>Discover</Text>
+          <Text style={styles.discoverSubtitle}>
+            Swipe through listings across campus
+          </Text>
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs }}>
           <TouchableOpacity
             onPress={() => setShowResults(true)}
-            style={styles.likedCountBtn}
+            style={[
+              styles.likedCountBtn,
+              {
+                backgroundColor: c.accent100,
+                borderColor: c.accent200,
+              },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={`${liked.length} liked items`}
           >
-            <Heart size={16} color="#0064B1" fill="#0064B1" strokeWidth={1.5} />
-            <Text style={styles.likedCountText}>{liked.length}</Text>
+            <Heart
+              size={14}
+              color={c.accentLight}
+              fill={c.accentLight}
+              strokeWidth={1.85}
+            />
+            <Text style={[styles.likedCountText, { color: c.accentLight }]}>
+              {liked.length}
+            </Text>
           </TouchableOpacity>
           <HeaderMenu />
         </View>
       </View>
 
-      {/* Swipe Area */}
       <View style={styles.swipeArea}>
         {!currentItem ? (
-          <View style={styles.noMoreItems}>
-            <ShoppingBag size={40} color="#D1D5DB" />
-            <Text style={styles.noMoreText}>No more items</Text>
-            <TouchableOpacity onPress={handleReset} style={styles.startOverSmallBtn}>
-              <Text style={styles.startOverSmallText}>Start Over</Text>
-            </TouchableOpacity>
-          </View>
+          <EmptyState
+            icon={<Sparkles size={22} color={c.textTertiary} />}
+            title="You're all caught up"
+            description="New listings from UTA students will appear here soon."
+            ctaLabel="Start over"
+            onCta={handleReset}
+          />
         ) : (
-          <View style={[styles.cardStack, { width: CARD_WIDTH, height: CARD_HEIGHT }]}>
-            {/* Next card preview */}
-            {nextItem && (
-              <View style={[styles.nextCard, { width: CARD_WIDTH, height: CARD_HEIGHT }]}>
+          <View
+            style={[styles.cardStack, { width: CARD_WIDTH, height: CARD_HEIGHT }]}
+          >
+            {afterNextItem ? (
+              <View
+                style={[
+                  styles.stackCard,
+                  {
+                    width: CARD_WIDTH,
+                    height: CARD_HEIGHT,
+                    transform: [{ scale: 0.88 }, { translateY: 20 }],
+                    opacity: 0.5,
+                  },
+                ]}
+              >
+                <Image
+                  source={{ uri: afterNextItem.image }}
+                  style={StyleSheet.absoluteFillObject}
+                  resizeMode="cover"
+                />
+              </View>
+            ) : null}
+            {nextItem ? (
+              <View
+                style={[
+                  styles.stackCard,
+                  {
+                    width: CARD_WIDTH,
+                    height: CARD_HEIGHT,
+                    transform: [{ scale: 0.94 }, { translateY: 10 }],
+                    opacity: 0.75,
+                  },
+                ]}
+              >
                 <Image
                   source={{ uri: nextItem.image }}
                   style={StyleSheet.absoluteFillObject}
                   resizeMode="cover"
                 />
               </View>
-            )}
-            {/* Current card */}
+            ) : null}
             <SwipeCard
               key={currentItem.id}
               item={currentItem}
               onSwipe={handleSwipe}
+              onTap={() => setSelectedItem(currentItem)}
               exitDirection={exitDirection}
               cardWidth={CARD_WIDTH}
               cardHeight={CARD_HEIGHT}
-              styles={styles}
+              theme={theme}
             />
           </View>
         )}
       </View>
 
-      {/* Action Buttons */}
-      {currentItem && (
-        <View style={[styles.actionBtns, { paddingBottom: insets.bottom + 8 }]}>
-          <SpringActionButton onPress={handleUndo} style={styles.actionBtnSmall}>
-            <RotateCcw size={18} color={c.textTertiary} />
+      {currentItem ? (
+        <View
+          style={[
+            styles.actionBtns,
+            { paddingBottom: insets.bottom + spacing.md },
+          ]}
+        >
+          <SpringActionButton
+            onPress={handleUndo}
+            size={48}
+            bg={c.surface}
+            borderColor={c.hairline}
+            accessibilityLabel="Undo"
+          >
+            <RotateCcw size={18} color={c.textSecondary} strokeWidth={2} />
           </SpringActionButton>
           <SpringActionButton
             onPress={() => handleSwipe("left")}
-            style={[styles.actionBtnLarge, styles.passBtn]}
+            size={64}
+            bg={c.errorSurface}
+            borderColor={c.error}
+            accessibilityLabel="Pass"
           >
-            <X size={26} color="#F87171" />
+            <X size={28} color={c.error} strokeWidth={2.2} />
           </SpringActionButton>
           <SpringActionButton
             onPress={() => handleSwipe("right")}
-            style={[styles.actionBtnLarge, styles.wantBtnAction]}
+            size={64}
+            bg={c.accentSurface}
+            borderColor={c.accentLight}
+            accessibilityLabel="Save"
           >
-            <Heart size={26} color="#0064B1" />
+            <Heart size={28} color={c.accentLight} strokeWidth={2.2} />
           </SpringActionButton>
           <SpringActionButton
             onPress={() => setShowResults(true)}
-            style={styles.actionBtnSmall}
+            size={48}
+            bg={c.surface}
+            borderColor={c.hairline}
+            accessibilityLabel="View picks"
           >
-            <ShoppingBag size={18} color={c.textTertiary} />
+            <ShoppingBag size={18} color={c.textSecondary} strokeWidth={2} />
           </SpringActionButton>
         </View>
-      )}
+      ) : null}
+
+      {selectedItem ? (
+        <View style={StyleSheet.absoluteFillObject}>
+          <ItemDetail
+            item={selectedItem}
+            onBack={() => setSelectedItem(null)}
+            isSaved={savedItems.includes(selectedItem.id)}
+            onToggleSave={() => toggleSave(selectedItem.id)}
+          />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -505,49 +414,61 @@ export function SwipePage() {
 function SwipeCard({
   item,
   onSwipe,
+  onTap,
   exitDirection,
   cardWidth,
   cardHeight,
-  styles,
+  theme,
 }: {
   item: ListingItem;
   onSwipe: (direction: "left" | "right") => void;
+  onTap: () => void;
   exitDirection: "left" | "right" | null;
   cardWidth: number;
   cardHeight: number;
-  styles: ReturnType<typeof makeStyles>;
+  theme: Theme;
 }) {
-  const translateX = React.useRef(new Animated.Value(0)).current;
-  const translateY = React.useRef(new Animated.Value(0)).current;
+  const c = theme.colors;
+  const t = theme.typography;
+  const translateX = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
 
   const rotate = translateX.interpolate({
     inputRange: [-200, 0, 200],
-    outputRange: ["-12deg", "0deg", "12deg"],
+    outputRange: ["-10deg", "0deg", "10deg"],
   });
 
   const likeOpacity = translateX.interpolate({
-    inputRange: [0, 100],
+    inputRange: [0, 120],
     outputRange: [0, 1],
     extrapolate: "clamp",
   });
 
   const passOpacity = translateX.interpolate({
-    inputRange: [-100, 0],
+    inputRange: [-120, 0],
     outputRange: [1, 0],
     extrapolate: "clamp",
   });
 
-  React.useEffect(() => {
+  const tintOpacity = translateX.interpolate({
+    inputRange: [-200, -40, 0, 40, 200],
+    outputRange: [0.55, 0, 0, 0, 0.55],
+    extrapolate: "clamp",
+  });
+
+  const lastHapticBucket = useRef<number>(0);
+
+  useEffect(() => {
     if (exitDirection === "left") {
       Animated.timing(translateX, {
-        toValue: -width - 100,
-        duration: 300,
+        toValue: -width - 120,
+        duration: 240,
         useNativeDriver: true,
       }).start();
     } else if (exitDirection === "right") {
       Animated.timing(translateX, {
-        toValue: width + 100,
-        duration: 300,
+        toValue: width + 120,
+        duration: 240,
         useNativeDriver: true,
       }).start();
     } else {
@@ -558,20 +479,49 @@ function SwipeCard({
         useNativeDriver: true,
       }).start();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [exitDirection]);
 
-  const panResponder = React.useRef(
+  const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onPanResponderMove: (_, gesture) => {
         translateX.setValue(gesture.dx);
-        translateY.setValue(gesture.dy * 0.3);
+        translateY.setValue(gesture.dy * 0.25);
+        const bucket =
+          Math.abs(gesture.dx) > SWIPE_THRESHOLD
+            ? Math.sign(gesture.dx)
+            : 0;
+        if (bucket !== lastHapticBucket.current) {
+          lastHapticBucket.current = bucket;
+          if (bucket !== 0) {
+            triggerHaptic("light");
+          }
+        }
       },
       onPanResponderRelease: (_, gesture) => {
+        lastHapticBucket.current = 0;
         if (gesture.dx > SWIPE_THRESHOLD) {
           onSwipe("right");
         } else if (gesture.dx < -SWIPE_THRESHOLD) {
           onSwipe("left");
+        } else if (
+          Math.abs(gesture.dx) < TAP_SLOP &&
+          Math.abs(gesture.dy) < TAP_SLOP
+        ) {
+          Animated.spring(translateX, {
+            toValue: 0,
+            damping: 18,
+            stiffness: 260,
+            useNativeDriver: true,
+          }).start();
+          Animated.spring(translateY, {
+            toValue: 0,
+            damping: 18,
+            stiffness: 260,
+            useNativeDriver: true,
+          }).start();
+          onTap();
         } else {
           Animated.spring(translateX, {
             toValue: 0,
@@ -594,10 +544,14 @@ function SwipeCard({
     <Animated.View
       {...panResponder.panHandlers}
       style={[
-        styles.swipeCard,
+        cardStyles.card,
+        theme.elevation.level3,
         {
           width: cardWidth,
           height: cardHeight,
+          backgroundColor: c.surface,
+          borderColor: c.hairline,
+          borderWidth: theme.dark ? 1 : 0,
           transform: [{ translateX }, { translateY }, { rotate }],
         },
       ]}
@@ -608,32 +562,114 @@ function SwipeCard({
         resizeMode="cover"
       />
 
-      {/* WANT label */}
-      <Animated.View style={[styles.wantLabel, { opacity: likeOpacity }]}>
-        <Text style={styles.wantText}>WANT</Text>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          StyleSheet.absoluteFillObject,
+          {
+            backgroundColor: c.error,
+            opacity: Animated.multiply(tintOpacity, passOpacity.interpolate({ inputRange: [0, 1], outputRange: [0, 1] })),
+          },
+        ]}
+      />
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          StyleSheet.absoluteFillObject,
+          {
+            backgroundColor: c.accent,
+            opacity: Animated.multiply(tintOpacity, likeOpacity.interpolate({ inputRange: [0, 1], outputRange: [0, 1] })),
+          },
+        ]}
+      />
+
+      <LinearGradient
+        pointerEvents="none"
+        colors={["rgba(0,0,0,0.55)", "transparent"]}
+        locations={[0, 0.4]}
+        style={[StyleSheet.absoluteFillObject, { height: cardHeight * 0.25 }]}
+      />
+      <LinearGradient
+        pointerEvents="none"
+        colors={["transparent", "rgba(0,0,0,0.75)"]}
+        locations={[0.3, 1]}
+        style={StyleSheet.absoluteFillObject}
+      />
+
+      <Animated.View
+        style={[
+          cardStyles.wantLabel,
+          {
+            opacity: likeOpacity,
+            borderColor: c.accentLight,
+          },
+        ]}
+      >
+        <Text style={[cardStyles.wantText, { color: c.accentLight }]}>
+          SAVE
+        </Text>
       </Animated.View>
 
-      {/* PASS label */}
-      <Animated.View style={[styles.passLabel, { opacity: passOpacity }]}>
-        <Text style={styles.passText}>PASS</Text>
+      <Animated.View
+        style={[
+          cardStyles.passLabel,
+          {
+            opacity: passOpacity,
+            borderColor: c.error,
+          },
+        ]}
+      >
+        <Text style={[cardStyles.passText, { color: c.error }]}>PASS</Text>
       </Animated.View>
 
-      {/* Gradient-style overlay for readability */}
-      <View style={styles.cardGradient} pointerEvents="none" />
+      <View style={cardStyles.topRow}>
+        <View
+          style={[
+            cardStyles.priceBadge,
+            { backgroundColor: "rgba(0,0,0,0.45)" },
+          ]}
+        >
+          <Text
+            style={[
+              cardStyles.priceText,
+              { fontFamily: t.bodyStrong.fontFamily },
+            ]}
+          >
+            ${item.price}
+          </Text>
+        </View>
+        <View
+          style={[
+            cardStyles.conditionBadge,
+            { backgroundColor: "rgba(0,0,0,0.45)" },
+          ]}
+        >
+          <Text
+            style={[
+              cardStyles.conditionText,
+              { fontFamily: t.label.fontFamily },
+            ]}
+          >
+            {item.condition}
+          </Text>
+        </View>
+      </View>
 
-      {/* Item info overlay */}
-      <View style={styles.cardOverlay}>
-        <View style={styles.cardOverlayContent}>
-          <View>
-            <Text style={styles.cardItemTitle}>{item.title}</Text>
-            <View style={styles.cardSellerRow}>
-              <Image source={{ uri: item.sellerAvatar }} style={styles.cardSellerAvatar} />
-              <Text style={styles.cardSellerName}>{item.sellerName}</Text>
-            </View>
-          </View>
-          <View style={styles.cardPriceBadge}>
-            <Text style={styles.cardPriceText}>${item.price}</Text>
-          </View>
+      <View style={cardStyles.overlayContent}>
+        <Text
+          style={[
+            cardStyles.title,
+            { fontFamily: t.title.fontFamily },
+          ]}
+          numberOfLines={2}
+        >
+          {item.title}
+        </Text>
+        <View style={cardStyles.sellerRow}>
+          <Avatar source={item.sellerAvatar} name={item.sellerName} size={24} />
+          <Text style={cardStyles.sellerName} numberOfLines={1}>
+            {item.sellerName}
+          </Text>
         </View>
       </View>
     </Animated.View>
@@ -643,17 +679,33 @@ function SwipeCard({
 function SpringActionButton({
   children,
   onPress,
-  style,
+  size,
+  bg,
+  borderColor,
+  accessibilityLabel,
 }: {
   children: React.ReactNode;
   onPress: () => void;
-  style?: any;
+  size: number;
+  bg: string;
+  borderColor: string;
+  accessibilityLabel: string;
 }) {
   const scale = useRef(new Animated.Value(1)).current;
   const handlePressIn = () =>
-    Animated.spring(scale, { toValue: 0.87, useNativeDriver: true, speed: 60, bounciness: 4 }).start();
+    Animated.spring(scale, {
+      toValue: 0.88,
+      useNativeDriver: true,
+      speed: 60,
+      bounciness: 4,
+    }).start();
   const handlePressOut = () =>
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 10 }).start();
+    Animated.spring(scale, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 30,
+      bounciness: 10,
+    }).start();
 
   return (
     <Animated.View style={{ transform: [{ scale }] }}>
@@ -662,10 +714,248 @@ function SpringActionButton({
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         activeOpacity={1}
-        style={style}
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: bg,
+          borderWidth: 1,
+          borderColor,
+          justifyContent: "center",
+          alignItems: "center",
+        }}
       >
         {children}
       </TouchableOpacity>
     </Animated.View>
   );
+}
+
+const cardStyles = StyleSheet.create({
+  card: {
+    position: "absolute",
+    borderRadius: radius.xxl,
+    overflow: "hidden",
+  },
+  topRow: {
+    position: "absolute",
+    top: spacing.md,
+    left: spacing.md,
+    right: spacing.md,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  priceBadge: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+  },
+  priceText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  conditionBadge: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+  },
+  conditionText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "600",
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+  },
+  overlayContent: {
+    position: "absolute",
+    left: spacing.lg,
+    right: spacing.lg,
+    bottom: spacing.lg,
+    gap: spacing.sm,
+  },
+  title: {
+    color: "#FFFFFF",
+    fontSize: 22,
+    lineHeight: 28,
+    fontWeight: "700",
+    letterSpacing: -0.2,
+  },
+  sellerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  sellerName: {
+    color: "rgba(255,255,255,0.85)",
+    fontSize: 12,
+    flex: 1,
+  },
+  wantLabel: {
+    position: "absolute",
+    top: 48,
+    left: 24,
+    borderWidth: 3,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.md,
+    transform: [{ rotate: "-12deg" }],
+  },
+  wantText: {
+    fontSize: 22,
+    fontWeight: "800",
+    letterSpacing: 2,
+  },
+  passLabel: {
+    position: "absolute",
+    top: 48,
+    right: 24,
+    borderWidth: 3,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.md,
+    transform: [{ rotate: "12deg" }],
+  },
+  passText: {
+    fontSize: 22,
+    fontWeight: "800",
+    letterSpacing: 2,
+  },
+});
+
+function makeStyles(theme: Theme) {
+  const c = theme.colors;
+  const t = theme.typography;
+  return StyleSheet.create({
+    container: { flex: 1 },
+    discoverHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.sm,
+      paddingBottom: spacing.md,
+    },
+    titleWrap: {
+      flex: 1,
+    },
+    discoverTitle: {
+      color: c.textPrimary,
+      fontFamily: t.title.fontFamily,
+      fontSize: 22,
+      fontWeight: "700",
+      letterSpacing: -0.3,
+    },
+    discoverSubtitle: {
+      color: c.textTertiary,
+      fontFamily: t.caption.fontFamily,
+      fontSize: 12,
+      marginTop: 2,
+    },
+    likedCountBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: spacing.md,
+      paddingVertical: 6,
+      borderRadius: radius.full,
+      borderWidth: 1,
+    },
+    likedCountText: {
+      fontFamily: t.label.fontFamily,
+      fontSize: 13,
+      fontWeight: "700",
+    },
+    swipeArea: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: spacing.lg,
+    },
+    cardStack: {
+      position: "relative",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    stackCard: {
+      position: "absolute",
+      borderRadius: radius.xxl,
+      overflow: "hidden",
+    },
+    actionBtns: {
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+      gap: spacing.lg,
+      paddingTop: spacing.md,
+      paddingHorizontal: spacing.lg,
+    },
+    // Results screen
+    resultsHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+    },
+    resultsTitle: {
+      fontFamily: t.title.fontFamily,
+      fontSize: 22,
+      color: c.textPrimary,
+      fontWeight: "700",
+      letterSpacing: -0.3,
+    },
+    resultsCount: {
+      fontFamily: t.caption.fontFamily,
+      fontSize: 12,
+      color: c.textTertiary,
+      marginTop: 2,
+    },
+    resultsList: {
+      padding: spacing.lg,
+      gap: spacing.md,
+    },
+    resultItem: {
+      flexDirection: "row",
+      gap: spacing.md,
+      padding: spacing.md,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+    },
+    resultItemImage: {
+      width: 64,
+      height: 64,
+      borderRadius: radius.md,
+    },
+    resultItemInfo: {
+      flex: 1,
+      minWidth: 0,
+      justifyContent: "center",
+    },
+    resultItemTitle: {
+      fontFamily: t.bodyStrong.fontFamily,
+      fontSize: 15,
+      color: c.textPrimary,
+      fontWeight: "600",
+    },
+    resultItemPrice: {
+      fontFamily: t.body.fontFamily,
+      fontSize: 14,
+      color: c.accentLight,
+      marginTop: 2,
+      fontWeight: "700",
+    },
+    resultItemSeller: {
+      fontFamily: t.caption.fontFamily,
+      fontSize: 11,
+      color: c.textTertiary,
+      marginTop: 2,
+    },
+    startOverContainer: {
+      padding: spacing.lg,
+    },
+  });
 }

@@ -1,15 +1,27 @@
+import { type TextStyle, type ViewStyle } from "react-native";
+
 export type ColorTokens = {
   background: string;
   surface: string;
   surfaceElevated: string;
+  surfaceSunken: string;
+  surfaceOverlay: string;
   border: string;
   borderLight: string;
+  hairline: string;
   textPrimary: string;
   textSecondary: string;
   textTertiary: string;
+  textInverse: string;
   accent: string;
   accentLight: string;
   accentSurface: string;
+  accent50: string;
+  accent100: string;
+  accent200: string;
+  accent500: string;
+  accent600: string;
+  accent700: string;
   success: string;
   successSurface: string;
   error: string;
@@ -25,9 +37,57 @@ export type ColorTokens = {
   star: string;
 };
 
+export type TypographyToken = {
+  fontFamily: string;
+  fontSize: number;
+  lineHeight: number;
+  letterSpacing: number;
+  fontWeight: TextStyle["fontWeight"];
+};
+
+export type TypographyScale = {
+  display: TypographyToken;
+  title: TypographyToken;
+  headline: TypographyToken;
+  body: TypographyToken;
+  bodyStrong: TypographyToken;
+  label: TypographyToken;
+  caption: TypographyToken;
+  overline: TypographyToken;
+};
+
+export type ElevationPreset = Pick<
+  ViewStyle,
+  | "shadowColor"
+  | "shadowOffset"
+  | "shadowOpacity"
+  | "shadowRadius"
+  | "elevation"
+  | "borderWidth"
+  | "borderColor"
+>;
+
+export type ElevationScale = {
+  level1: ElevationPreset;
+  level2: ElevationPreset;
+  level3: ElevationPreset;
+};
+
+export type MotionTokens = {
+  fast: number;
+  base: number;
+  slow: number;
+  pressScale: number;
+  listStagger: number;
+  shimmer: number;
+};
+
 export type Theme = {
   dark: boolean;
   colors: ColorTokens;
+  typography: TypographyScale;
+  elevation: ElevationScale;
+  motion: MotionTokens;
 };
 
 export type ThemeContextType = {
@@ -41,11 +101,19 @@ import { type Session, type User } from "@supabase/supabase-js";
 export interface AuthContextType {
   session: Session | null;
   user: User | null;
+  /** True while the app is actively talking to Supabase (signing in/up). */
   loading: boolean;
+  /** True only on first mount while a stored session is being restored. */
+  initializing: boolean;
   justCompletedEmailConfirmation: boolean;
   error: string | null;
+  info: string | null;
   clearConfirmed: () => void;
-  login: () => Promise<void>;
+  clearMessages: () => void;
+  /** Sign in with a UTA email + password via Supabase Auth. */
+  loginWithPassword: (email: string, password: string) => Promise<void>;
+  /** Create a new Supabase user, then sign in. */
+  signup: (email: string, password: string, name?: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 

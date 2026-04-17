@@ -1,8 +1,8 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useFocusEffect } from "expo-router";
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   FlatList,
   Image,
@@ -10,40 +10,56 @@ import {
   StyleSheet,
   Dimensions,
   Animated,
-  ActivityIndicator,
+  RefreshControl,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Search, SlidersHorizontal, X, Heart } from "lucide-react-native";
-import { listings as mockListings, categories } from "../data/mockData";
-import { type ListingItem, type ColorTokens } from "../lib/types";
+import { Search, SlidersHorizontal, X, Heart, Compass } from "lucide-react-native";
+import { listings as mockListings, categories, DEMO_MODE } from "../data/mockData";
+import { type ListingItem, type ColorTokens, type Theme } from "../lib/types";
 import { MavLogo } from "./MavLogo";
 import { ItemDetail } from "./ItemDetail";
 import { HeaderMenu } from "./HeaderMenu";
 import { getListings } from "../lib/listings";
-import { useAuth } from "../lib/auth-context";
-import { getSavedListingIds, saveItem, unsaveItem } from "../lib/saved";
+import { useSaved } from "../lib/SavedContext";
 import { useTheme } from "../lib/ThemeContext";
+import { Chip } from "./ui/Chip";
+import { IconButton } from "./ui/IconButton";
+import { Input } from "./ui/Input";
+import { EmptyState } from "./ui/EmptyState";
+import { ListItemEnter } from "./ui/ListItemEnter";
+import { Skeleton } from "./ui/Skeleton";
+import { Badge } from "./ui/Badge";
+import { spacing, radius } from "../lib/theme";
 
 const { width } = Dimensions.get("window");
-const CARD_WIDTH = (width - 1) / 2;
+const GUTTER = spacing.lg;
+const CARD_GAP = spacing.md;
+const CARD_WIDTH = (width - GUTTER * 2 - CARD_GAP) / 2;
 
 export function HomePage() {
   const { theme } = useTheme();
   const c = theme.colors;
-  const { user } = useAuth();
+  const t = theme.typography;
+  const insets = useSafeAreaInsets();
+
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [showFilters, setShowFilters] = useState(false);
   const [maxPrice, setMaxPrice] = useState(1000);
   const [selectedCondition, setSelectedCondition] = useState("All");
   const [selectedItem, setSelectedItem] = useState<ListingItem | null>(null);
-  const [savedItems, setSavedItems] = useState<string[]>([]);
+  const { savedIds: savedItems, toggleSave: toggleSavedItem, refresh: refreshSaved } = useSaved();
   const [showSearch, setShowSearch] = useState(false);
   const [allListings, setAllListings] = useState<ListingItem[]>(mockListings);
   const [loadingListings, setLoadingListings] = useState(false);
-  const insets = useSafeAreaInsets();
+  const [refreshing, setRefreshing] = useState(false);
 
-  const loadListings = () => {
+  const loadListings = useCallback(() => {
+    if (DEMO_MODE) {
+      setAllListings([...mockListings]);
+      return;
+    }
     setLoadingListings(true);
     getListings()
       .then((data) => {
@@ -51,214 +67,247 @@ export function HomePage() {
       })
       .catch((error) => {
         console.error("Listings fetch error:", error);
-        // Supabase not configured yet — mock data stays
       })
       .finally(() => setLoadingListings(false));
-  };
-
-  useEffect(() => {
-    loadListings();
   }, []);
 
   useEffect(() => {
-    if (!user) return;
-    getSavedListingIds(user.id)
-      .then(setSavedItems)
-      .catch(() => {});
-  }, [user]);
+    loadListings();
+  }, [loadListings]);
 
-  const filteredListings = allListings.filter((item) => {
-    const matchesSearch =
-      item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.description.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory === "All" || item.category === selectedCategory;
-    const matchesPrice = item.price <= maxPrice;
-    const matchesCondition = selectedCondition === "All" || item.condition === selectedCondition;
-    return matchesSearch && matchesCategory && matchesPrice && matchesCondition;
-  });
-
-  const toggleSave = (id: string) => {
-    const isSaved = savedItems.includes(id);
-    setSavedItems((prev) => isSaved ? prev.filter((i) => i !== id) : [...prev, id]);
-    if (user) {
-      if (isSaved) {
-        unsaveItem(user.id, id).catch(() => {
-          setSavedItems((prev) => [...prev, id]); // revert on error
-        });
-      } else {
-        saveItem(user.id, id).catch(() => {
-          setSavedItems((prev) => prev.filter((i) => i !== id)); // revert on error
-        });
-      }
-    }
-  };
-
-  const renderItem = ({ item }: { item: ListingItem }) => (
-    <AnimatedCard
-      item={item}
-      isSaved={savedItems.includes(item.id)}
-      onPress={() => setSelectedItem(item)}
-      onToggleSave={() => toggleSave(item.id)}
-    />
+  // Refresh listings whenever the Home tab regains focus.
+  useFocusEffect(
+    useCallback(() => {
+      loadListings();
+    }, [loadListings])
   );
 
+  useFocusEffect(
+    useCallback(() => {
+      refreshSaved();
+    }, [refreshSaved])
+  );
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    if (DEMO_MODE) {
+      setAllListings([...mockListings]);
+      setRefreshing(false);
+      return;
+    }
+    getListings()
+      .then((data) => setAllListings(data))
+      .catch(() => {})
+      .finally(() => setRefreshing(false));
+  }, []);
+
+  const filteredListings = useMemo(() => {
+    return allListings.filter((item) => {
+      const matchesSearch =
+        item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.description.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesCategory =
+        selectedCategory === "All" || item.category === selectedCategory;
+      const matchesPrice = item.price <= maxPrice;
+      const matchesCondition =
+        selectedCondition === "All" || item.condition === selectedCondition;
+      return matchesSearch && matchesCategory && matchesPrice && matchesCondition;
+    });
+  }, [allListings, searchQuery, selectedCategory, maxPrice, selectedCondition]);
+
+  const toggleSave = useCallback(
+    (id: string) => {
+      const item = allListings.find((l) => l.id === id);
+      if (!item) return;
+      toggleSavedItem(item);
+    },
+    [allListings, toggleSavedItem]
+  );
+
+  const styles = useMemo(() => makeStyles(theme), [theme]);
+
+  const renderItem = ({ item, index }: { item: ListingItem; index: number }) => (
+    <ListItemEnter index={index % 8}>
+      <ListingCard
+        item={item}
+        isSaved={savedItems.includes(item.id)}
+        onPress={() => setSelectedItem(item)}
+        onToggleSave={() => toggleSave(item.id)}
+      />
+    </ListItemEnter>
+  );
+
+  const showSkeletons = loadingListings && allListings.length === 0;
+
   return (
-    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: c.background }]}>
-      {/* Header */}
+    <View
+      style={[
+        styles.container,
+        { paddingTop: insets.top, backgroundColor: c.background },
+      ]}
+    >
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <MavLogo size={28} />
+          <View style={styles.logoFrame}>
+            <MavLogo size={28} />
+          </View>
+          <Text style={styles.brandText}>Mav Market</Text>
         </View>
         <View style={styles.headerRight}>
-          <TouchableOpacity
-            onPress={() => setShowSearch(!showSearch)}
-            style={styles.iconBtn}
-          >
-            <Search size={22} color={c.textPrimary} strokeWidth={1.5} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setShowFilters(!showFilters)}
-            style={styles.iconBtn}
-          >
-            <SlidersHorizontal
-              size={22}
-              color={showFilters ? c.accent : c.textPrimary}
-              strokeWidth={1.5}
-            />
-          </TouchableOpacity>
+          <IconButton
+            icon={<Search size={20} color={c.textPrimary} strokeWidth={1.75} />}
+            onPress={() => setShowSearch((v) => !v)}
+            accessibilityLabel="Search"
+            size={40}
+          />
+          <IconButton
+            icon={
+              <SlidersHorizontal
+                size={20}
+                color={showFilters ? c.accentLight : c.textPrimary}
+                strokeWidth={1.75}
+              />
+            }
+            onPress={() => setShowFilters((v) => !v)}
+            accessibilityLabel="Filters"
+            size={40}
+            variant={showFilters ? "accent" : "plain"}
+          />
           <HeaderMenu savedItemIds={savedItems} onToggleSave={toggleSave} />
         </View>
       </View>
 
-      {/* Search Bar */}
       {showSearch && (
-        <View style={[styles.searchBar, { backgroundColor: c.surface, borderColor: c.borderLight }]}>
-          <Search size={16} color={c.textTertiary} style={{ marginRight: 8 }} />
-          <TextInput
-            placeholder="Search..."
-            placeholderTextColor={c.textTertiary}
+        <View style={styles.searchWrap}>
+          <Input
+            placeholder="Search listings"
             value={searchQuery}
             onChangeText={setSearchQuery}
-            style={[styles.searchInput, { color: c.textPrimary }]}
             autoFocus
+            leftIcon={<Search size={16} color={c.textTertiary} />}
+            rightIcon={
+              searchQuery !== "" ? (
+                <TouchableOpacity onPress={() => setSearchQuery("")} hitSlop={8}>
+                  <X size={16} color={c.textTertiary} />
+                </TouchableOpacity>
+              ) : undefined
+            }
           />
-          {searchQuery !== "" && (
-            <TouchableOpacity onPress={() => setSearchQuery("")}>
-              <X size={16} color={c.textTertiary} />
-            </TouchableOpacity>
-          )}
         </View>
       )}
 
-      {/* Filter Panel */}
       {showFilters && (
-        <View style={[styles.filterPanel, { borderBottomColor: c.borderLight }]}>
-          <Text style={[styles.filterLabel, { color: c.textSecondary }]}>Max Price</Text>
-          <View style={styles.conditionRow}>
+        <View style={styles.filterPanel}>
+          <Text style={styles.filterLabel}>Max price</Text>
+          <View style={styles.chipRow}>
             {[50, 100, 250, 500, 1000].map((p) => (
-              <TouchableOpacity
+              <Chip
                 key={p}
+                label={p === 1000 ? "Any" : `$${p}`}
+                selected={maxPrice === p}
                 onPress={() => setMaxPrice(p)}
-                style={[
-                  styles.conditionChip,
-                  { backgroundColor: c.surface },
-                  maxPrice === p && { backgroundColor: c.accent, borderColor: c.accent },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.conditionChipText,
-                    { color: c.textSecondary },
-                    maxPrice === p && { color: c.background },
-                  ]}
-                >
-                  {p === 1000 ? "Any" : `$${p}`}
-                </Text>
-              </TouchableOpacity>
+                size="sm"
+              />
             ))}
           </View>
-          <Text style={[styles.filterLabel, { color: c.textSecondary }]}>Condition</Text>
-          <View style={styles.conditionRow}>
+          <Text style={styles.filterLabel}>Condition</Text>
+          <View style={styles.chipRow}>
             {["All", "Like New", "Good", "Fair"].map((cond) => (
-              <TouchableOpacity
+              <Chip
                 key={cond}
+                label={cond}
+                selected={selectedCondition === cond}
                 onPress={() => setSelectedCondition(cond)}
-                style={[
-                  styles.conditionChip,
-                  { backgroundColor: c.surface },
-                  selectedCondition === cond && { backgroundColor: c.accent, borderColor: c.accent },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.conditionChipText,
-                    { color: c.textSecondary },
-                    selectedCondition === cond && { color: c.background },
-                  ]}
-                >
-                  {cond}
-                </Text>
-              </TouchableOpacity>
+                size="sm"
+              />
             ))}
           </View>
         </View>
       )}
 
-      {/* Category Chips */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        style={[styles.categoriesScroll, { borderBottomColor: c.surface }]}
+        style={styles.categoriesScroll}
         contentContainerStyle={styles.categoriesContent}
       >
         {categories.map((cat) => (
-          <TouchableOpacity
+          <Chip
             key={cat}
+            label={cat}
+            selected={selectedCategory === cat}
             onPress={() => setSelectedCategory(cat)}
-            style={[
-              styles.categoryChip,
-              { borderColor: c.border },
-              selectedCategory === cat && { backgroundColor: c.accent, borderColor: c.accent },
-            ]}
-          >
-            <Text
-              style={[
-                styles.categoryChipText,
-                { color: c.textSecondary },
-                selectedCategory === cat && styles.categoryChipTextActive,
-              ]}
-            >
-              {cat}
-            </Text>
-          </TouchableOpacity>
+          />
         ))}
       </ScrollView>
 
-      {/* Listings Grid */}
       <FlatList
-        data={loadingListings ? [] : filteredListings}
+        data={showSkeletons ? [] : filteredListings}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
         numColumns={2}
         columnWrapperStyle={styles.row}
+        contentContainerStyle={styles.gridContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={c.accentLight}
+            colors={[c.accentLight]}
+            progressBackgroundColor={c.surface}
+          />
+        }
+        ListHeaderComponent={
+          showSkeletons ? (
+            <View style={styles.skeletonGrid}>
+              {Array.from({ length: 6 }).map((_, i) => (
+                <View key={i} style={{ width: CARD_WIDTH, marginBottom: spacing.lg }}>
+                  <Skeleton width={CARD_WIDTH} height={CARD_WIDTH} radius={radius.md} />
+                  <View style={{ height: spacing.sm }} />
+                  <Skeleton height={14} radius={radius.xs} width="80%" />
+                  <View style={{ height: spacing.xs }} />
+                  <Skeleton height={12} radius={radius.xs} width="50%" />
+                </View>
+              ))}
+            </View>
+          ) : null
+        }
         ListEmptyComponent={
-          loadingListings ? (
-            <View style={styles.emptyState}>
-              <ActivityIndicator color={c.accent} />
-            </View>
-          ) : (
-            <View style={styles.emptyState}>
-              <Search size={32} color={c.border} strokeWidth={1.5} />
-              <Text style={[styles.emptyText, { color: c.textTertiary }]}>No items found</Text>
-              <Text style={[styles.emptySubtext, { color: c.border }]}>Try adjusting your filters</Text>
-            </View>
+          showSkeletons ? null : (
+            <EmptyState
+              icon={<Compass size={28} color={c.textTertiary} strokeWidth={1.75} />}
+              title={
+                searchQuery || selectedCategory !== "All"
+                  ? "No matches just yet"
+                  : "No listings yet"
+              }
+              description={
+                searchQuery || selectedCategory !== "All"
+                  ? "Try a different filter, or be the first to list something in this category."
+                  : "Be the first Maverick to post a listing today."
+              }
+              ctaLabel={
+                searchQuery || selectedCategory !== "All"
+                  ? "Clear filters"
+                  : undefined
+              }
+              onCta={
+                searchQuery || selectedCategory !== "All"
+                  ? () => {
+                      setSearchQuery("");
+                      setSelectedCategory("All");
+                      setMaxPrice(1000);
+                      setSelectedCondition("All");
+                    }
+                  : undefined
+              }
+            />
           )
         }
-        style={[styles.list, { backgroundColor: c.surface }]}
+        style={styles.list}
       />
 
-      {/* Item Detail Overlay */}
       {selectedItem && (
         <SlideUpOverlay>
           <ItemDetail
@@ -269,7 +318,6 @@ export function HomePage() {
           />
         </SlideUpOverlay>
       )}
-
     </View>
   );
 }
@@ -284,15 +332,17 @@ function SlideUpOverlay({ children }: { children: React.ReactNode }) {
       mass: 0.9,
       useNativeDriver: true,
     }).start();
-  }, []);
+  }, [translateY]);
   return (
-    <Animated.View style={[StyleSheet.absoluteFillObject, { transform: [{ translateY }] }]}>
+    <Animated.View
+      style={[StyleSheet.absoluteFillObject, { transform: [{ translateY }] }]}
+    >
       {children}
     </Animated.View>
   );
 }
 
-function AnimatedCard({
+function ListingCard({
   item,
   isSaved,
   onPress,
@@ -305,248 +355,305 @@ function AnimatedCard({
 }) {
   const { theme } = useTheme();
   const c = theme.colors;
+  const t = theme.typography;
   const scale = useRef(new Animated.Value(1)).current;
+  const heartScale = useRef(new Animated.Value(1)).current;
 
   const handlePressIn = () => {
-    Animated.spring(scale, { toValue: 0.96, useNativeDriver: true, speed: 60, bounciness: 4 }).start();
+    Animated.spring(scale, {
+      toValue: theme.motion.pressScale,
+      useNativeDriver: true,
+      speed: 60,
+      bounciness: 0,
+    }).start();
   };
   const handlePressOut = () => {
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 8 }).start();
+    Animated.spring(scale, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 30,
+      bounciness: 6,
+    }).start();
+  };
+
+  const tapHeart = () => {
+    Animated.sequence([
+      Animated.spring(heartScale, {
+        toValue: 1.25,
+        useNativeDriver: true,
+        speed: 60,
+        bounciness: 12,
+      }),
+      Animated.spring(heartScale, {
+        toValue: 1,
+        useNativeDriver: true,
+        speed: 30,
+        bounciness: 8,
+      }),
+    ]).start();
+    onToggleSave();
+  };
+
+  const conditionTone = condTone(item.condition);
+
+  const handleHeartPress = (e?: any) => {
+    if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+    tapHeart();
   };
 
   return (
-    <Animated.View style={[styles.card, { transform: [{ scale }], backgroundColor: c.surfaceElevated }]}>
+    <Animated.View
+      style={[
+        cardStyles.card,
+        theme.elevation.level1,
+        {
+          width: CARD_WIDTH,
+          backgroundColor: c.surface,
+          borderColor: c.hairline,
+          transform: [{ scale }],
+        },
+      ]}
+    >
       <TouchableOpacity
         onPress={onPress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         activeOpacity={1}
+        accessibilityRole="button"
+        accessibilityLabel={`${item.title}, ${item.price} dollars`}
       >
-        <View style={styles.cardImageContainer}>
-          <Image source={{ uri: item.image }} style={styles.cardImage} resizeMode="cover" />
-          <TouchableOpacity
-            onPress={onToggleSave}
-            style={styles.heartBtn}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Heart
-              size={20}
-              color={isSaved ? c.error : "#FFFFFF"}
-              fill={isSaved ? c.error : "transparent"}
-              strokeWidth={1.5}
-            />
-          </TouchableOpacity>
-          <View style={[styles.priceBadge, { backgroundColor: c.overlay }]}>
-            <Text style={styles.priceBadgeText}>${item.price}</Text>
+        <View style={[cardStyles.imageBox, { width: CARD_WIDTH, height: CARD_WIDTH }]}>
+          <Image
+            source={{ uri: item.image }}
+            style={cardStyles.image}
+            resizeMode="cover"
+          />
+          <LinearGradient
+            colors={["transparent", "rgba(0,0,0,0.55)"]}
+            locations={[0.5, 1]}
+            style={cardStyles.imageScrim}
+            pointerEvents="none"
+          />
+          <View style={cardStyles.priceChip}>
+            <Text style={cardStyles.priceText}>${item.price}</Text>
           </View>
         </View>
-        <View style={styles.cardCaption}>
-          <Text style={[styles.cardTitle, { color: c.textPrimary }]} numberOfLines={1}>{item.title}</Text>
-          <View style={styles.cardMeta}>
-            <View style={[styles.conditionPill, { backgroundColor: conditionColor(item.condition, c) + "22" }]}>
-              <Text style={[styles.conditionPillText, { color: conditionColor(item.condition, c) }]}>
-                {item.condition}
-              </Text>
-            </View>
+        <View style={cardStyles.body}>
+          <Text
+            style={{
+              color: c.textPrimary,
+              fontFamily: t.bodyStrong.fontFamily,
+              fontSize: 14,
+              lineHeight: 18,
+              fontWeight: "600",
+            }}
+            numberOfLines={1}
+          >
+            {item.title}
+          </Text>
+          <View style={cardStyles.metaRow}>
+            <Badge label={item.condition} tone={conditionTone} />
           </View>
-          <View style={styles.cardSellerRow}>
-            <Image source={{ uri: item.sellerAvatar }} style={styles.cardSellerAvatar} />
-            <Text style={[styles.cardSellerName, { color: c.textTertiary }]}>{item.sellerName}</Text>
-            <Text style={[styles.cardDot, { color: c.border }]}>·</Text>
-            <Text style={[styles.cardPostedAt, { color: c.textTertiary }]}>{item.postedAt}</Text>
+          <View style={cardStyles.sellerRow}>
+            <Image
+              source={{ uri: item.sellerAvatar }}
+              style={cardStyles.sellerAvatar}
+            />
+            <Text
+              style={{
+                color: c.textTertiary,
+                fontFamily: t.caption.fontFamily,
+                fontSize: 11,
+              }}
+              numberOfLines={1}
+            >
+              {item.sellerName} · {item.postedAt}
+            </Text>
           </View>
         </View>
       </TouchableOpacity>
+      <Animated.View
+        style={[cardStyles.heartWrap, { transform: [{ scale: heartScale }] }]}
+        pointerEvents="box-none"
+      >
+        <TouchableOpacity
+          onPress={handleHeartPress}
+          hitSlop={8}
+          style={[cardStyles.heartBtn, { backgroundColor: "rgba(0,0,0,0.42)" }]}
+          accessibilityRole="button"
+          accessibilityLabel={isSaved ? "Unsave" : "Save"}
+        >
+          <Heart
+            size={16}
+            color={isSaved ? c.error : "#FFFFFF"}
+            fill={isSaved ? c.error : "transparent"}
+            strokeWidth={1.75}
+          />
+        </TouchableOpacity>
+      </Animated.View>
     </Animated.View>
   );
 }
 
-function conditionColor(condition: string, c: ColorTokens): string {
+function condTone(condition: string): "accent" | "success" | "warning" | "neutral" {
   switch (condition) {
-    case "New": return c.accent;
-    case "Like New": return c.success;
-    case "Good": return c.warning;
-    case "Fair": return c.textTertiary;
-    default: return c.textTertiary;
+    case "New":
+      return "accent";
+    case "Like New":
+      return "success";
+    case "Good":
+      return "warning";
+    default:
+      return "neutral";
   }
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  headerTitle: {
-    fontSize: 20,
-    letterSpacing: -0.3,
-  },
-  headerRight: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  iconBtn: {
-    padding: 8,
-  },
-  searchBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginHorizontal: 16,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    padding: 0,
-  },
-  filterPanel: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    gap: 12,
-  },
-  filterLabel: {
-    fontSize: 12,
-  },
-  conditionRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  conditionChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 100,
-  },
-  conditionChipText: {
-    fontSize: 12,
-  },
-  categoriesScroll: {
-    borderBottomWidth: 1,
-    flexGrow: 0,
-    flexShrink: 0,
-  },
-  categoriesContent: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    gap: 8,
-  },
-  categoryChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 100,
-    borderWidth: 1,
-    alignSelf: "flex-start",
-  },
-  categoryChipText: {
-    fontSize: 12,
-  },
-  categoryChipTextActive: {
-    color: "#FFFFFF",
-    fontWeight: "600",
-  },
-  list: {
-    flex: 1,
-  },
-  row: {
-    gap: 1,
-  },
+const cardStyles = StyleSheet.create({
   card: {
-    width: CARD_WIDTH,
+    borderRadius: radius.lg,
+    overflow: "hidden",
+    borderWidth: 1,
+    marginBottom: spacing.lg,
   },
-  cardImageContainer: {
-    width: CARD_WIDTH,
-    height: CARD_WIDTH,
+  imageBox: {
     position: "relative",
+    backgroundColor: "#000",
   },
-  cardImage: {
-    width: CARD_WIDTH,
-    height: CARD_WIDTH,
+  image: { width: "100%", height: "100%" },
+  imageScrim: { ...StyleSheet.absoluteFillObject },
+  heartWrap: {
+    position: "absolute",
+    top: spacing.sm,
+    right: spacing.sm,
   },
   heartBtn: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-    padding: 6,
+    width: 32,
+    height: 32,
+    borderRadius: radius.full,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  priceBadge: {
+  priceChip: {
     position: "absolute",
-    bottom: 8,
-    left: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
+    bottom: spacing.sm,
+    left: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+    backgroundColor: "rgba(0,0,0,0.55)",
   },
-  priceBadgeText: {
+  priceText: {
     color: "#FFFFFF",
-    fontSize: 12,
+    fontSize: 13,
+    fontWeight: "700",
+    letterSpacing: 0.1,
   },
-  cardCaption: {
-    padding: 10,
+  body: {
+    padding: spacing.md,
+    gap: spacing.xs,
   },
-  cardTitle: {
-    fontSize: 14,
-  },
-  cardMeta: {
+  metaRow: {
     flexDirection: "row",
-    gap: 4,
-    marginTop: 3,
-    marginBottom: 1,
+    gap: spacing.xs,
+    marginTop: 2,
   },
-  conditionPill: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    alignSelf: "flex-start",
-  },
-  conditionPillText: {
-    fontSize: 10,
-    fontWeight: "600",
-  },
-  cardSellerRow: {
+  sellerRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    marginTop: 4,
+    gap: spacing.xs,
+    marginTop: spacing.xs,
   },
-  cardSellerAvatar: {
+  sellerAvatar: {
     width: 16,
     height: 16,
     borderRadius: 8,
-  },
-  cardSellerName: {
-    fontSize: 11,
-  },
-  cardDot: {
-    fontSize: 11,
-  },
-  cardPostedAt: {
-    fontSize: 11,
-  },
-  emptyState: {
-    flex: 1,
-    height: 192,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  emptyText: {
-    fontSize: 14,
-  },
-  emptySubtext: {
-    fontSize: 12,
+    backgroundColor: "#222",
   },
 });
+
+function makeStyles(theme: Theme) {
+  const c: ColorTokens = theme.colors;
+  const t = theme.typography;
+  return StyleSheet.create({
+    container: { flex: 1 },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: c.hairline,
+    },
+    headerLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
+    },
+    logoFrame: {
+      width: 32,
+      height: 32,
+      borderRadius: radius.sm,
+      overflow: "hidden",
+    },
+    brandText: {
+      color: c.textPrimary,
+      fontFamily: t.headline.fontFamily,
+      fontSize: 17,
+      fontWeight: "700",
+      letterSpacing: -0.2,
+    },
+    headerRight: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.xs,
+    },
+    searchWrap: {
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.sm,
+    },
+    filterPanel: {
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+      gap: spacing.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: c.hairline,
+    },
+    filterLabel: {
+      color: c.textSecondary,
+      fontFamily: t.label.fontFamily,
+      fontSize: 12,
+      letterSpacing: 0.1,
+      fontWeight: "500",
+    },
+    chipRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: spacing.sm,
+    },
+    categoriesScroll: {
+      flexGrow: 0,
+      flexShrink: 0,
+    },
+    categoriesContent: {
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.md,
+      paddingBottom: spacing.md,
+      gap: spacing.sm,
+    },
+    list: { flex: 1 },
+    gridContent: {
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.sm,
+      paddingBottom: spacing.huge,
+    },
+    row: {
+      gap: CARD_GAP,
+    },
+    skeletonGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      justifyContent: "space-between",
+    },
+  });
+}

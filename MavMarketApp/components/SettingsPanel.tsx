@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -13,15 +13,31 @@ import {
   Switch,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
-import { X, ChevronRight, Bell, Shield, HelpCircle, Info, Heart, LogOut, Moon, Sun } from "lucide-react-native";
-import { type ListingItem } from "../data/mockData";
+import {
+  X,
+  ChevronRight,
+  Bell,
+  Shield,
+  HelpCircle,
+  Info,
+  Heart,
+  LogOut,
+  Moon,
+  Sun,
+  ChevronLeft,
+} from "lucide-react-native";
+import { type ListingItem, type Theme } from "../lib/types";
 import { ItemDetail } from "./ItemDetail";
 import { useAuth } from "../lib/auth-context";
-import { getNotificationPreferences, updateNotificationPreferences } from "../lib/profile";
+import {
+  getNotificationPreferences,
+  updateNotificationPreferences,
+} from "../lib/profile";
 import { getListingsByIds } from "../lib/listings";
-import { supabase } from "../lib/supabase";
 import { useTheme } from "../lib/ThemeContext";
+import { EmptyState } from "./ui/EmptyState";
+import { IconButton } from "./ui/IconButton";
+import { spacing, radius } from "../lib/theme";
 
 const { width } = Dimensions.get("window");
 
@@ -36,7 +52,14 @@ interface SettingsPanelProps {
 
 type ViewMode = "main" | "notifications" | "saved";
 
-export function SettingsPanel({ isOpen, onClose, savedItemIds = [], onToggleSave, onAdminPress, isAdmin = false }: SettingsPanelProps) {
+export function SettingsPanel({
+  isOpen,
+  onClose,
+  savedItemIds = [],
+  onToggleSave,
+  onAdminPress,
+  isAdmin = false,
+}: SettingsPanelProps) {
   const { theme, isDark, toggleTheme } = useTheme();
   const c = theme.colors;
   const [viewMode, setViewMode] = useState<ViewMode>("main");
@@ -52,9 +75,8 @@ export function SettingsPanel({ isOpen, onClose, savedItemIds = [], onToggleSave
   const slideX = useRef(new Animated.Value(width)).current;
   const { user, logout } = useAuth();
 
-  const styles = makeStyles(c);
+  const styles = useMemo(() => makeStyles(theme), [theme]);
 
-  // Animation only — isolated so data loading never interrupts the slide.
   useEffect(() => {
     if (isOpen) {
       Animated.timing(slideX, {
@@ -65,21 +87,22 @@ export function SettingsPanel({ isOpen, onClose, savedItemIds = [], onToggleSave
     } else {
       slideX.setValue(width);
     }
-  }, [isOpen]);
+  }, [isOpen, slideX]);
 
-  // Data loading — runs once when the panel opens.
   useEffect(() => {
     if (!isOpen) return;
     if (user) {
       getNotificationPreferences(user.id)
         .then((prefs) => {
-          if (Object.keys(prefs).length > 0) setNotifPrefs((prev) => ({ ...prev, ...prefs }));
+          if (Object.keys(prefs).length > 0)
+            setNotifPrefs((prev) => ({ ...prev, ...prefs }));
         })
         .catch(() => {});
     }
     getListingsByIds(savedItemIds)
       .then(setSavedItems)
       .catch(() => setSavedItems([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, user]);
 
   const handleNotifToggle = (key: string, value: boolean) => {
@@ -100,191 +123,244 @@ export function SettingsPanel({ isOpen, onClose, savedItemIds = [], onToggleSave
       animationType="none"
       onRequestClose={handleClose}
     >
-      {/* Backdrop */}
       <TouchableOpacity
         style={styles.backdrop}
         activeOpacity={1}
         onPress={handleClose}
       />
 
-      {/* Panel */}
       <Animated.View
-        style={[styles.panel, { paddingTop: insets.top, transform: [{ translateX: slideX }], backgroundColor: c.background }]}
+        style={[
+          styles.panel,
+          {
+            paddingTop: insets.top,
+            transform: [{ translateX: slideX }],
+            backgroundColor: c.background,
+          },
+        ]}
       >
-        {viewMode === "main" && (
+        {viewMode === "main" ? (
           <>
             <View style={styles.panelHeader}>
-              <Text style={styles.panelTitle}>Settings and Activity</Text>
-              <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
-                <X size={22} color={c.textPrimary} strokeWidth={1.5} />
-              </TouchableOpacity>
+              <Text style={styles.panelTitle}>Settings</Text>
+              <IconButton
+                icon={<X size={20} color={c.textPrimary} strokeWidth={1.85} />}
+                onPress={handleClose}
+                accessibilityLabel="Close settings"
+                size={40}
+              />
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Saved */}
+              <SectionLabel label="Activity" theme={theme} />
               <View style={styles.section}>
-                <TouchableOpacity
+                <MenuRow
+                  icon={<Heart size={18} color={c.textPrimary} strokeWidth={1.85} />}
+                  label="Saved listings"
                   onPress={() => setViewMode("saved")}
-                  style={styles.menuRow}
-                >
-                  <View style={styles.menuRowLeft}>
-                    <Heart size={20} color={c.textPrimary} strokeWidth={1.5} />
-                    <Text style={[styles.menuLabel, { color: c.textPrimary }]}>Saved Listings</Text>
-                  </View>
-                  <View style={styles.menuRowRight}>
-                    <Text style={styles.menuCount}>{savedItems.length}</Text>
-                    <ChevronRight size={18} color={c.textTertiary} />
-                  </View>
-                </TouchableOpacity>
+                  rightContent={
+                    <View style={styles.rightRow}>
+                      <Text style={styles.countText}>{savedItems.length}</Text>
+                      <ChevronRight size={16} color={c.textTertiary} />
+                    </View>
+                  }
+                  theme={theme}
+                />
               </View>
 
-              {/* Settings section */}
-              <View style={styles.sectionHeaderContainer}>
-                <Text style={styles.sectionHeader}>SETTINGS</Text>
-              </View>
+              <SectionLabel label="Preferences" theme={theme} />
               <View style={styles.section}>
-                {/* Dark mode toggle */}
-                <TouchableOpacity onPress={toggleTheme} style={styles.menuRow}>
-                  <View style={styles.menuRowLeft}>
-                    {isDark ? <Sun size={20} color={c.textPrimary} strokeWidth={1.5} /> : <Moon size={20} color={c.textPrimary} strokeWidth={1.5} />}
-                    <Text style={[styles.menuLabel, { color: c.textPrimary }]}>{isDark ? "Light Mode" : "Dark Mode"}</Text>
-                  </View>
-                  <Switch
-                    value={isDark}
-                    onValueChange={toggleTheme}
-                    trackColor={{ false: "#D1D5DB", true: c.accent }}
-                    thumbColor="#FFFFFF"
-                  />
-                </TouchableOpacity>
-                <TouchableOpacity
+                <MenuRow
+                  icon={
+                    isDark ? (
+                      <Sun size={18} color={c.textPrimary} strokeWidth={1.85} />
+                    ) : (
+                      <Moon size={18} color={c.textPrimary} strokeWidth={1.85} />
+                    )
+                  }
+                  label={isDark ? "Light mode" : "Dark mode"}
+                  onPress={toggleTheme}
+                  rightContent={
+                    <Switch
+                      value={isDark}
+                      onValueChange={toggleTheme}
+                      trackColor={{ false: c.border, true: c.accent500 }}
+                      thumbColor="#FFFFFF"
+                      ios_backgroundColor={c.border}
+                    />
+                  }
+                  theme={theme}
+                />
+                <MenuRow
+                  icon={<Bell size={18} color={c.textPrimary} strokeWidth={1.85} />}
+                  label="Notifications"
                   onPress={() => setViewMode("notifications")}
-                  style={styles.menuRow}
-                >
-                  <View style={styles.menuRowLeft}>
-                    <Bell size={20} color={c.textPrimary} strokeWidth={1.5} />
-                    <Text style={[styles.menuLabel, { color: c.textPrimary }]}>Notifications</Text>
-                  </View>
-                  <ChevronRight size={18} color={c.textTertiary} />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.menuRow}>
-                  <View style={styles.menuRowLeft}>
-                    <Shield size={20} color={c.textPrimary} strokeWidth={1.5} />
-                    <Text style={[styles.menuLabel, { color: c.textPrimary }]}>Privacy and Security</Text>
-                  </View>
-                  <ChevronRight size={18} color={c.textTertiary} />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.menuRow}>
-                  <View style={styles.menuRowLeft}>
-                    <HelpCircle size={20} color={c.textPrimary} strokeWidth={1.5} />
-                    <Text style={[styles.menuLabel, { color: c.textPrimary }]}>Help and Support</Text>
-                  </View>
-                  <ChevronRight size={18} color={c.textTertiary} />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.menuRow}>
-                  <View style={styles.menuRowLeft}>
-                    <Info size={20} color={c.textPrimary} strokeWidth={1.5} />
-                    <Text style={[styles.menuLabel, { color: c.textPrimary }]}>About</Text>
-                  </View>
-                  <ChevronRight size={18} color={c.textTertiary} />
-                </TouchableOpacity>
+                  rightContent={
+                    <ChevronRight size={16} color={c.textTertiary} />
+                  }
+                  theme={theme}
+                />
+                <MenuRow
+                  icon={<Shield size={18} color={c.textPrimary} strokeWidth={1.85} />}
+                  label="Privacy and security"
+                  onPress={() => {}}
+                  rightContent={
+                    <ChevronRight size={16} color={c.textTertiary} />
+                  }
+                  theme={theme}
+                />
+                <MenuRow
+                  icon={<HelpCircle size={18} color={c.textPrimary} strokeWidth={1.85} />}
+                  label="Help and support"
+                  onPress={() => {}}
+                  rightContent={
+                    <ChevronRight size={16} color={c.textTertiary} />
+                  }
+                  theme={theme}
+                />
+                <MenuRow
+                  icon={<Info size={18} color={c.textPrimary} strokeWidth={1.85} />}
+                  label="About Mav Market"
+                  onPress={() => {}}
+                  rightContent={
+                    <ChevronRight size={16} color={c.textTertiary} />
+                  }
+                  theme={theme}
+                />
               </View>
 
-              {/* Admin row — only visible to admins */}
-              {isAdmin && onAdminPress && (
+              {isAdmin && onAdminPress ? (
                 <>
-                  <View style={styles.sectionHeaderContainer}>
-                    <Text style={styles.sectionHeader}>ADMIN</Text>
-                  </View>
+                  <SectionLabel label="Admin" theme={theme} />
                   <View style={styles.section}>
-                    <TouchableOpacity onPress={() => { handleClose(); onAdminPress(); }} style={styles.menuRow}>
-                      <View style={styles.menuRowLeft}>
-                        <Shield size={20} color="#DC2626" strokeWidth={1.5} />
-                        <Text style={[styles.menuLabel, { color: "#DC2626" }]}>Moderation Queue</Text>
-                      </View>
-                      <ChevronRight size={18} color="#DC2626" />
-                    </TouchableOpacity>
+                    <MenuRow
+                      icon={
+                        <Shield size={18} color={c.error} strokeWidth={1.85} />
+                      }
+                      label="Moderation queue"
+                      labelColor={c.error}
+                      onPress={() => {
+                        handleClose();
+                        onAdminPress();
+                      }}
+                      rightContent={
+                        <ChevronRight size={16} color={c.error} />
+                      }
+                      theme={theme}
+                    />
                   </View>
                 </>
-              )}
+              ) : null}
 
-              {/* Sign Out */}
-              <View style={styles.sectionHeaderContainer} />
+              <SectionLabel label="" theme={theme} />
               <View style={styles.section}>
-                <TouchableOpacity
+                <MenuRow
+                  icon={<LogOut size={18} color={c.error} strokeWidth={1.85} />}
+                  label="Sign out"
+                  labelColor={c.error}
                   onPress={() => {
-                    Alert.alert("Sign Out", "Are you sure you want to sign out?", [
-                      { text: "Cancel", style: "cancel" },
-                      { text: "Sign Out", style: "destructive", onPress: () => logout() },
-                    ]);
+                    Alert.alert(
+                      "Sign Out",
+                      "Are you sure you want to sign out?",
+                      [
+                        { text: "Cancel", style: "cancel" },
+                        {
+                          text: "Sign Out",
+                          style: "destructive",
+                          onPress: () => logout(),
+                        },
+                      ]
+                    );
                   }}
-                  style={styles.menuRow}
-                >
-                  <View style={styles.menuRowLeft}>
-                    <LogOut size={20} color="#EF4444" strokeWidth={1.5} />
-                    <Text style={[styles.menuLabel, { color: "#EF4444" }]}>Sign Out</Text>
-                  </View>
-                </TouchableOpacity>
+                  theme={theme}
+                />
               </View>
+              <View style={{ height: spacing.xxxl }} />
             </ScrollView>
           </>
-        )}
+        ) : null}
 
-        {viewMode === "notifications" && (
-          <>
-            <View style={[styles.panelHeader, { backgroundColor: c.background }]}>
-              <TouchableOpacity onPress={() => setViewMode("main")} style={styles.closeBtn}>
-                <X size={22} color={c.textPrimary} strokeWidth={1.5} />
-              </TouchableOpacity>
-              <Text style={styles.panelTitle}>Notification Preferences</Text>
-            </View>
-            <ScrollView style={styles.notifList} showsVerticalScrollIndicator={false}>
-              <NotificationToggle
-                label="New Messages"
-                description="Get notified when you receive a message"
-                value={notifPrefs.new_messages ?? true}
-                onChange={(v) => handleNotifToggle("new_messages", v)}
-                c={c}
-              />
-              <NotificationToggle
-                label="Price Drops"
-                description="Alert when saved items go on sale"
-                value={notifPrefs.price_drops ?? true}
-                onChange={(v) => handleNotifToggle("price_drops", v)}
-                c={c}
-              />
-              <NotificationToggle
-                label="New Listings"
-                description="Notify about new items in your categories"
-                value={notifPrefs.new_listings ?? true}
-                onChange={(v) => handleNotifToggle("new_listings", v)}
-                c={c}
-              />
-              <NotificationToggle
-                label="Item Sold"
-                description="Alert when your listing sells"
-                value={notifPrefs.item_sold ?? true}
-                onChange={(v) => handleNotifToggle("item_sold", v)}
-                c={c}
-              />
-            </ScrollView>
-          </>
-        )}
-
-        {viewMode === "saved" && (
+        {viewMode === "notifications" ? (
           <>
             <View style={styles.panelHeader}>
-              <TouchableOpacity onPress={() => setViewMode("main")} style={styles.closeBtn}>
-                <X size={22} color={c.textPrimary} strokeWidth={1.5} />
-              </TouchableOpacity>
-              <Text style={styles.panelTitle}>Saved Listings</Text>
+              <IconButton
+                icon={
+                  <ChevronLeft
+                    size={20}
+                    color={c.textPrimary}
+                    strokeWidth={1.85}
+                  />
+                }
+                onPress={() => setViewMode("main")}
+                accessibilityLabel="Back"
+                size={40}
+              />
+              <Text style={styles.panelTitle}>Notifications</Text>
+              <View style={{ width: 40 }} />
+            </View>
+
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={{ padding: spacing.lg }}
+              showsVerticalScrollIndicator={false}
+            >
+              <NotificationToggle
+                label="New messages"
+                description="Get notified when you receive a new message."
+                value={notifPrefs.new_messages ?? true}
+                onChange={(v) => handleNotifToggle("new_messages", v)}
+                theme={theme}
+              />
+              <NotificationToggle
+                label="Price drops"
+                description="Alerts when items you've saved go on sale."
+                value={notifPrefs.price_drops ?? true}
+                onChange={(v) => handleNotifToggle("price_drops", v)}
+                theme={theme}
+              />
+              <NotificationToggle
+                label="New listings"
+                description="Hear about new items in the categories you follow."
+                value={notifPrefs.new_listings ?? true}
+                onChange={(v) => handleNotifToggle("new_listings", v)}
+                theme={theme}
+              />
+              <NotificationToggle
+                label="Item sold"
+                description="Know when one of your listings sells."
+                value={notifPrefs.item_sold ?? true}
+                onChange={(v) => handleNotifToggle("item_sold", v)}
+                theme={theme}
+              />
+            </ScrollView>
+          </>
+        ) : null}
+
+        {viewMode === "saved" ? (
+          <>
+            <View style={styles.panelHeader}>
+              <IconButton
+                icon={
+                  <ChevronLeft
+                    size={20}
+                    color={c.textPrimary}
+                    strokeWidth={1.85}
+                  />
+                }
+                onPress={() => setViewMode("main")}
+                accessibilityLabel="Back"
+                size={40}
+              />
+              <Text style={styles.panelTitle}>Saved</Text>
+              <View style={{ width: 40 }} />
             </View>
             <ScrollView showsVerticalScrollIndicator={false}>
               {savedItems.length === 0 ? (
-                <View style={styles.emptyState}>
-                  <Heart size={32} color="#D1D5DB" strokeWidth={1.5} />
-                  <Text style={styles.emptyText}>No saved items yet</Text>
-                  <Text style={styles.emptySubtext}>Save items you love to view them here</Text>
-                </View>
+                <EmptyState
+                  icon={<Heart size={22} color={c.textTertiary} />}
+                  title="Nothing saved yet"
+                  description="Tap the heart on a listing to save it for later."
+                />
               ) : (
                 <View style={styles.savedGrid}>
                   {savedItems.map((item) => (
@@ -292,6 +368,7 @@ export function SettingsPanel({ isOpen, onClose, savedItemIds = [], onToggleSave
                       key={item.id}
                       onPress={() => setSelectedItem(item)}
                       style={styles.gridItem}
+                      activeOpacity={0.85}
                     >
                       <Image
                         source={{ uri: item.image }}
@@ -302,14 +379,12 @@ export function SettingsPanel({ isOpen, onClose, savedItemIds = [], onToggleSave
                         <Text style={styles.priceBadgeText}>${item.price}</Text>
                       </View>
                       <View style={styles.gridCaption}>
-                        <Text style={styles.gridTitle} numberOfLines={1}>{item.title}</Text>
-                        <View style={styles.gridSeller}>
-                          <Image
-                            source={{ uri: item.sellerAvatar }}
-                            style={styles.gridSellerAvatar}
-                          />
-                          <Text style={styles.gridSellerName}>{item.sellerName}</Text>
-                        </View>
+                        <Text style={styles.gridTitle} numberOfLines={1}>
+                          {item.title}
+                        </Text>
+                        <Text style={styles.gridSellerName} numberOfLines={1}>
+                          {item.sellerName}
+                        </Text>
                       </View>
                     </TouchableOpacity>
                   ))}
@@ -317,21 +392,96 @@ export function SettingsPanel({ isOpen, onClose, savedItemIds = [], onToggleSave
               )}
             </ScrollView>
           </>
-        )}
+        ) : null}
 
-        {/* Item detail overlay inside panel */}
-        {selectedItem && (
+        {selectedItem ? (
           <View style={StyleSheet.absoluteFillObject}>
             <ItemDetail
               item={selectedItem}
               onBack={() => setSelectedItem(null)}
               isSaved={savedItemIds.includes(selectedItem.id)}
-              onToggleSave={() => onToggleSave(selectedItem.id)}
+              onToggleSave={() => onToggleSave?.(selectedItem.id)}
             />
           </View>
-        )}
+        ) : null}
       </Animated.View>
     </Modal>
+  );
+}
+
+function SectionLabel({
+  label,
+  theme,
+}: {
+  label: string;
+  theme: Theme;
+}) {
+  if (!label) {
+    return <View style={{ paddingTop: spacing.lg }} />;
+  }
+  return (
+    <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.sm }}>
+      <Text
+        style={{
+          color: theme.colors.textTertiary,
+          fontFamily: theme.typography.overline.fontFamily,
+          fontSize: 10,
+          fontWeight: "700",
+          letterSpacing: 1.2,
+          textTransform: "uppercase",
+        }}
+      >
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+function MenuRow({
+  icon,
+  label,
+  labelColor,
+  onPress,
+  rightContent,
+  theme,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  labelColor?: string;
+  onPress: () => void;
+  rightContent?: React.ReactNode;
+  theme: Theme;
+}) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        paddingHorizontal: spacing.lg,
+        paddingVertical: spacing.md,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: theme.colors.hairline,
+        minHeight: 52,
+      }}
+      activeOpacity={0.7}
+      accessibilityRole="button"
+    >
+      <View style={{ width: 28, alignItems: "center" }}>{icon}</View>
+      <Text
+        style={{
+          flex: 1,
+          marginLeft: spacing.md,
+          color: labelColor ?? theme.colors.textPrimary,
+          fontFamily: theme.typography.body.fontFamily,
+          fontSize: 15,
+          fontWeight: "500",
+        }}
+      >
+        {label}
+      </Text>
+      {rightContent}
+    </TouchableOpacity>
   );
 }
 
@@ -340,192 +490,148 @@ function NotificationToggle({
   description,
   value,
   onChange,
-  c,
+  theme,
 }: {
   label: string;
   description: string;
   value: boolean;
   onChange: (v: boolean) => void;
-  c: any;
+  theme: Theme;
 }) {
-  const notifStyles = makeNotifStyles(c);
+  const c = theme.colors;
   return (
-    <View style={notifStyles.row}>
-      <View style={notifStyles.textBlock}>
-        <Text style={notifStyles.label}>{label}</Text>
-        <Text style={notifStyles.desc}>{description}</Text>
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "flex-start",
+        justifyContent: "space-between",
+        paddingVertical: spacing.md,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: c.hairline,
+      }}
+    >
+      <View style={{ flex: 1, marginRight: spacing.md }}>
+        <Text
+          style={{
+            color: c.textPrimary,
+            fontFamily: theme.typography.bodyStrong.fontFamily,
+            fontSize: 15,
+            fontWeight: "600",
+          }}
+        >
+          {label}
+        </Text>
+        <Text
+          style={{
+            color: c.textTertiary,
+            fontFamily: theme.typography.caption.fontFamily,
+            fontSize: 12,
+            marginTop: 2,
+          }}
+        >
+          {description}
+        </Text>
       </View>
       <Switch
         value={value}
         onValueChange={onChange}
-        trackColor={{ false: "#D1D5DB", true: c.accent }}
+        trackColor={{ false: c.border, true: c.accent500 }}
         thumbColor="#FFFFFF"
+        ios_backgroundColor={c.border}
       />
     </View>
   );
 }
 
-const ITEM_WIDTH = (width) / 2 - 1;
-
-const makeStyles = (c: any) => StyleSheet.create({
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: c.overlay,
-  },
-  panel: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    bottom: 0,
-    width: width,
-    backgroundColor: c.background,
-  },
-  panelHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: c.borderLight,
-  },
-  panelTitle: {
-    fontSize: 18,
-    color: c.textPrimary,
-  },
-  closeBtn: {
-    padding: 8,
-  },
-  section: {
-    borderBottomWidth: 1,
-    borderBottomColor: c.borderLight,
-  },
-  menuRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-  },
-  menuRowLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  menuRowRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  menuLabel: {
-    fontSize: 14,
-    color: c.textPrimary,
-  },
-  menuCount: {
-    fontSize: 12,
-    color: c.textTertiary,
-  },
-  sectionHeaderContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 8,
-  },
-  sectionHeader: {
-    fontSize: 12,
-    color: c.textSecondary,
-    letterSpacing: 0.5,
-  },
-  notifList: {
-    flex: 1,
-    padding: 16,
-  },
-  emptyState: {
-    height: 192,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    gap: 8,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: c.textTertiary,
-  },
-  emptySubtext: {
-    fontSize: 12,
-    color: "#D1D5DB",
-    textAlign: "center",
-  },
-  savedGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 1,
-    backgroundColor: c.borderLight,
-  },
-  gridItem: {
-    width: ITEM_WIDTH,
-    backgroundColor: c.background,
-  },
-  gridImage: {
-    width: ITEM_WIDTH,
-    height: ITEM_WIDTH,
-  },
-  priceBadge: {
-    position: "absolute",
-    bottom: 48,
-    left: 8,
-    backgroundColor: "rgba(0,0,0,0.7)",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  priceBadgeText: {
-    color: "#FFFFFF",
-    fontSize: 12,
-  },
-  gridCaption: {
-    padding: 10,
-  },
-  gridTitle: {
-    fontSize: 14,
-    color: c.textPrimary,
-  },
-  gridSeller: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginTop: 4,
-  },
-  gridSellerAvatar: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-  },
-  gridSellerName: {
-    fontSize: 11,
-    color: c.textTertiary,
-  },
-});
-
-const makeNotifStyles = (c: any) => StyleSheet.create({
-  row: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: c.surface,
-  },
-  textBlock: {
-    flex: 1,
-    marginRight: 12,
-  },
-  label: {
-    fontSize: 14,
-    color: c.textPrimary,
-  },
-  desc: {
-    fontSize: 12,
-    color: c.textTertiary,
-    marginTop: 2,
-  },
-});
+function makeStyles(theme: Theme) {
+  const c = theme.colors;
+  const t = theme.typography;
+  const ITEM_WIDTH = width / 2 - 1;
+  return StyleSheet.create({
+    backdrop: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: c.overlay,
+    },
+    panel: {
+      position: "absolute",
+      top: 0,
+      right: 0,
+      bottom: 0,
+      width: width,
+    },
+    panelHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: c.hairline,
+    },
+    panelTitle: {
+      color: c.textPrimary,
+      fontFamily: t.title.fontFamily,
+      fontSize: 18,
+      fontWeight: "700",
+      letterSpacing: -0.2,
+    },
+    section: {
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: c.hairline,
+    },
+    rightRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.xs,
+    },
+    countText: {
+      color: c.textTertiary,
+      fontFamily: t.caption.fontFamily,
+      fontSize: 12,
+    },
+    savedGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 1,
+      backgroundColor: c.hairline,
+    },
+    gridItem: {
+      width: ITEM_WIDTH,
+      backgroundColor: c.background,
+    },
+    gridImage: {
+      width: ITEM_WIDTH,
+      height: ITEM_WIDTH,
+    },
+    priceBadge: {
+      position: "absolute",
+      top: spacing.sm,
+      left: spacing.sm,
+      backgroundColor: "rgba(0,0,0,0.55)",
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 2,
+      borderRadius: radius.full,
+    },
+    priceBadgeText: {
+      color: "#FFFFFF",
+      fontFamily: t.label.fontFamily,
+      fontSize: 11,
+      fontWeight: "700",
+    },
+    gridCaption: {
+      padding: spacing.md,
+    },
+    gridTitle: {
+      color: c.textPrimary,
+      fontFamily: t.body.fontFamily,
+      fontSize: 13,
+      fontWeight: "600",
+    },
+    gridSellerName: {
+      color: c.textTertiary,
+      fontFamily: t.caption.fontFamily,
+      fontSize: 11,
+      marginTop: 2,
+    },
+  });
+}

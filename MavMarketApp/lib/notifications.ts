@@ -1,5 +1,18 @@
 import { supabase } from "./supabase";
 import { type Notification } from "./types";
+import {
+  DEMO_MODE,
+  notifications as mockNotifications,
+} from "../data/mockData";
+
+// In-memory store so mark-as-read persists across re-renders in demo mode.
+let demoNotifications: Notification[] | null = null;
+function ensureDemoStore(): Notification[] {
+  if (!demoNotifications) {
+    demoNotifications = mockNotifications.map((n) => ({ ...n }));
+  }
+  return demoNotifications;
+}
 
 export async function createNotification(params: {
   userId: string;
@@ -9,6 +22,20 @@ export async function createNotification(params: {
   avatarUrl?: string;
   itemImage?: string;
 }): Promise<void> {
+  if (DEMO_MODE) {
+    const store = ensureDemoStore();
+    store.unshift({
+      id: `demo-${Date.now()}`,
+      type: params.type,
+      title: params.title,
+      message: params.message,
+      timestamp: "Just now",
+      read: false,
+      avatar: params.avatarUrl,
+      itemImage: params.itemImage,
+    });
+    return;
+  }
   const { error } = await supabase.from("notifications").insert({
     user_id: params.userId,
     type: params.type,
@@ -22,6 +49,10 @@ export async function createNotification(params: {
 }
 
 export async function getNotifications(userId: string): Promise<Notification[]> {
+  if (DEMO_MODE) {
+    return ensureDemoStore().map((n) => ({ ...n }));
+  }
+
   const { data, error } = await supabase
     .from("notifications")
     .select("id, type, title, message, read, avatar_url, item_image, created_at")
@@ -44,6 +75,12 @@ export async function getNotifications(userId: string): Promise<Notification[]> 
 }
 
 export async function markNotificationAsRead(id: string): Promise<void> {
+  if (DEMO_MODE) {
+    const store = ensureDemoStore();
+    const target = store.find((n) => n.id === id);
+    if (target) target.read = true;
+    return;
+  }
   const { error } = await supabase
     .from("notifications")
     .update({ read: true })
