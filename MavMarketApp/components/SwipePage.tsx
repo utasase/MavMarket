@@ -29,6 +29,7 @@ import {
 import { type ListingItem, type Theme } from "../lib/types";
 import { ItemDetail } from "./ItemDetail";
 import { getListings } from "../lib/listings";
+import { useDemoPurchasedIds } from "../lib/demoPurchases";
 import { HeaderMenu } from "./HeaderMenu";
 import { useTheme } from "../lib/ThemeContext";
 import { useSaved } from "../lib/SavedContext";
@@ -66,6 +67,7 @@ export function SwipePage() {
   const { savedIds: savedItems, toggleSave: toggleSavedItem, setSaved, refresh: refreshSaved } = useSaved();
 
   const [allItems, setAllItems] = useState<ListingItem[]>(mockListings);
+  const purchasedIds = useDemoPurchasedIds();
   const [liked, setLiked] = useState<string[]>([]);
   const [passed, setPassed] = useState<string[]>([]);
   const [exitDirection, setExitDirection] = useState<"left" | "right" | null>(
@@ -89,8 +91,22 @@ export function SwipePage() {
     }, [refreshSaved])
   );
 
+  // If the listing currently open in the swipe detail overlay gets
+  // purchased via the demo checkout, close the overlay so the user
+  // returns to the deck (with the purchased card already filtered out).
+  useEffect(() => {
+    if (selectedItem && purchasedIds.includes(selectedItem.id)) {
+      setSelectedItem(null);
+    }
+  }, [purchasedIds, selectedItem]);
+
+  const purchasedSet = useMemo(() => new Set(purchasedIds), [purchasedIds]);
+
   const availableItems = allItems.filter(
-    (item) => !liked.includes(item.id) && !passed.includes(item.id)
+    (item) =>
+      !liked.includes(item.id) &&
+      !passed.includes(item.id) &&
+      !purchasedSet.has(item.id)
   );
 
   const currentItem = availableItems[0];

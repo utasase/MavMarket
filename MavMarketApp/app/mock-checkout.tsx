@@ -15,6 +15,7 @@ import { useTheme } from "../lib/ThemeContext";
 import { Button } from "../components/ui/Button";
 import { spacing, radius } from "../lib/theme";
 import { calculateServiceFee, calculateTotal } from "../lib/payments";
+import { markListingPurchased } from "../lib/demoPurchases";
 import { type Theme } from "../lib/types";
 
 export default function MockCheckoutScreen() {
@@ -31,6 +32,8 @@ export default function MockCheckoutScreen() {
   const insets = useSafeAreaInsets();
 
   const title = typeof params.title === "string" ? params.title : "Demo item";
+  const listingId =
+    typeof params.listingId === "string" ? params.listingId : null;
   const priceNum = Number(params.price ?? 0) || 0;
   const fee = calculateServiceFee(priceNum);
   const total = calculateTotal(priceNum);
@@ -47,6 +50,10 @@ export default function MockCheckoutScreen() {
     if (processing) return;
     setProcessing(true);
     const sessionId = `demo-${Date.now()}`;
+    // Flip the listing to "purchased" in the in-memory demo store so the
+    // Home grid, Discover deck, and Saved list drop it immediately — no
+    // backend available in demo mode to persist `status = sold`.
+    markListingPurchased(listingId);
     // Give the user a brief "processing" beat so the button state reads as
     // a real charge, then jump straight to the existing success screen.
     setTimeout(() => {

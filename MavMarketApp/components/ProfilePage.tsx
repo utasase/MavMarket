@@ -48,6 +48,7 @@ import { AdminModerationPanel } from "./AdminModerationPanel";
 import { HeaderMenu } from "./HeaderMenu";
 import { findOrCreateDirectConversation } from "../lib/messages";
 import { useSaved } from "../lib/SavedContext";
+import { useDemoPurchasedIds } from "../lib/demoPurchases";
 import { ItemDetail } from "./ItemDetail";
 import { useTheme } from "../lib/ThemeContext";
 import { Avatar } from "./ui/Avatar";
@@ -125,10 +126,13 @@ export function ProfilePage() {
     "listings"
   );
   const { savedItems: savedFromContext, setSaved, refresh: refreshSaved } = useSaved();
-  const starredListings = useMemo(
-    () => [...savedFromContext].sort((a, b) => a.title.localeCompare(b.title)),
-    [savedFromContext]
-  );
+  const purchasedIds = useDemoPurchasedIds();
+  const starredListings = useMemo(() => {
+    const purchased = new Set(purchasedIds);
+    return [...savedFromContext]
+      .filter((item) => !purchased.has(item.id))
+      .sort((a, b) => a.title.localeCompare(b.title));
+  }, [savedFromContext, purchasedIds]);
   const [selectedListing, setSelectedListing] = useState<ListingItem | null>(
     null
   );
@@ -214,6 +218,14 @@ export function ProfilePage() {
       refreshSaved();
     }, [loadProfile, refreshSaved, viewingOtherUser])
   );
+
+  // Close the listing detail overlay if the open item has been purchased
+  // via the demo checkout, so the user returns to the profile tabs.
+  useEffect(() => {
+    if (selectedListing && purchasedIds.includes(selectedListing.id)) {
+      setSelectedListing(null);
+    }
+  }, [purchasedIds, selectedListing]);
 
   useEffect(() => {
     if (!sellerUserId || sellerUserId === user?.id) {

@@ -21,6 +21,7 @@ import { MavLogo } from "./MavLogo";
 import { ItemDetail } from "./ItemDetail";
 import { HeaderMenu } from "./HeaderMenu";
 import { getListings } from "../lib/listings";
+import { useDemoPurchasedIds } from "../lib/demoPurchases";
 import { useSaved } from "../lib/SavedContext";
 import { useTheme } from "../lib/ThemeContext";
 import { Chip } from "./ui/Chip";
@@ -50,6 +51,7 @@ export function HomePage() {
   const [selectedCondition, setSelectedCondition] = useState("All");
   const [selectedItem, setSelectedItem] = useState<ListingItem | null>(null);
   const { savedIds: savedItems, toggleSave: toggleSavedItem, refresh: refreshSaved } = useSaved();
+  const purchasedIds = useDemoPurchasedIds();
   const [showSearch, setShowSearch] = useState(false);
   const [allListings, setAllListings] = useState<ListingItem[]>(mockListings);
   const [loadingListings, setLoadingListings] = useState(false);
@@ -88,6 +90,15 @@ export function HomePage() {
     }, [refreshSaved])
   );
 
+  // If the listing currently open in the detail overlay gets purchased
+  // (via the demo checkout), close the overlay so the user lands back on
+  // the feed with the sold item already filtered out.
+  useEffect(() => {
+    if (selectedItem && purchasedIds.includes(selectedItem.id)) {
+      setSelectedItem(null);
+    }
+  }, [purchasedIds, selectedItem]);
+
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     if (DEMO_MODE) {
@@ -102,7 +113,9 @@ export function HomePage() {
   }, []);
 
   const filteredListings = useMemo(() => {
+    const purchased = new Set(purchasedIds);
     return allListings.filter((item) => {
+      if (purchased.has(item.id)) return false;
       const matchesSearch =
         item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.description.toLowerCase().includes(searchQuery.toLowerCase());
@@ -113,7 +126,14 @@ export function HomePage() {
         selectedCondition === "All" || item.condition === selectedCondition;
       return matchesSearch && matchesCategory && matchesPrice && matchesCondition;
     });
-  }, [allListings, searchQuery, selectedCategory, maxPrice, selectedCondition]);
+  }, [
+    allListings,
+    purchasedIds,
+    searchQuery,
+    selectedCategory,
+    maxPrice,
+    selectedCondition,
+  ]);
 
   const toggleSave = useCallback(
     (id: string) => {

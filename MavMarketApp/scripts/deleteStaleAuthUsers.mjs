@@ -2,11 +2,13 @@
 // Reads EXPO_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY from .env.local.
 //
 // Deletes:
-//   - ama3373@mavs.uta.edu (exact)
-//   - any e2e.probe+*@mavs.uta.edu (prefix match)
+//   - any e2e.probe+*@mavs.uta.edu users created by the smoke tests (prefix match)
+//   - optional extra emails supplied via DELETE_STALE_USER_EMAILS
+//     (comma-separated list, e.g. "you@mavs.uta.edu,teammate@uta.edu")
 //
 // Usage:
 //   node scripts/deleteStaleAuthUsers.mjs
+//   DELETE_STALE_USER_EMAILS="foo@mavs.uta.edu" node scripts/deleteStaleAuthUsers.mjs
 
 import fs from "node:fs";
 import path from "node:path";
@@ -38,7 +40,11 @@ const admin = createClient(supabaseUrl, serviceRoleKey, {
   },
 });
 
-const TARGET_EXACT = new Set(["ama3373@mavs.uta.edu"]);
+const extraEmails = (process.env.DELETE_STALE_USER_EMAILS || "")
+  .split(",")
+  .map((e) => e.trim().toLowerCase())
+  .filter(Boolean);
+const TARGET_EXACT = new Set(extraEmails);
 const TARGET_PREFIX = "e2e.probe+";
 const TARGET_DOMAIN = "@mavs.uta.edu";
 
