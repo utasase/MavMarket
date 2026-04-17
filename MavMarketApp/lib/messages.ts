@@ -130,36 +130,43 @@ export async function sendMessage(
   });
   if (error) throw error;
 
-  // Best-effort notification enrichment should never fail the send flow.
-  (async () => {
-    const { data: conversation } = await supabase
-      .from("conversations")
-      .select("buyer_id, seller_id, listing:listings(image_url)")
-      .eq("id", conversationId)
-      .single();
+  // Best-effort notification enrichment should never fail the send flow, but
+  // awaiting it keeps tests and callers deterministic after the RPC succeeds.
+  await sendMessageNotification(conversationId, senderId, text).catch(() => {});
+}
 
-    if (!conversation) return;
+async function sendMessageNotification(
+  conversationId: string,
+  senderId: string,
+  text: string
+): Promise<void> {
+  const { data: conversation } = await supabase
+    .from("conversations")
+    .select("buyer_id, seller_id, listing:listings(image_url)")
+    .eq("id", conversationId)
+    .single();
 
-    const recipientId =
-      conversation.buyer_id === senderId
-        ? conversation.seller_id
-        : conversation.buyer_id;
+  if (!conversation) return;
 
-    const { data: sender } = await supabase
-      .from("users")
-      .select("name, avatar_url")
-      .eq("id", senderId)
-      .single();
+  const recipientId =
+    conversation.buyer_id === senderId
+      ? conversation.seller_id
+      : conversation.buyer_id;
 
-    await createNotification({
-      userId: recipientId,
-      type: "system",
-      title: sender?.name ? `New message from ${sender.name}` : "New message",
-      message: text.length > 80 ? `${text.slice(0, 80)}...` : text,
-      avatarUrl: sender?.avatar_url ?? undefined,
-      itemImage: conversation.listing?.image_url ?? undefined,
-    });
-  })().catch(() => {});
+  const { data: sender } = await supabase
+    .from("users")
+    .select("name, avatar_url")
+    .eq("id", senderId)
+    .single();
+
+  await createNotification({
+    userId: recipientId,
+    type: "system",
+    title: sender?.name ? `New message from ${sender.name}` : "New message",
+    message: text.length > 80 ? `${text.slice(0, 80)}...` : text,
+    avatarUrl: sender?.avatar_url ?? undefined,
+    itemImage: conversation.listing?.image_url ?? undefined,
+  });
 }
 
 export function subscribeToMessages(
